@@ -24,12 +24,12 @@
   /* ======================================================================== */
 
   var LEVELS = [
-    { name: 'Rookie', blurb: 'Leaves pieces hanging often. Good for your very first games.', skill: 0, depth: 1, movetime: 80, random: 0.35 },
-    { name: 'Beginner', blurb: 'Makes sensible moves but misses simple tactics.', skill: 0, depth: 3, movetime: 150, random: 0.12 },
-    { name: 'Casual', blurb: 'Plays like a friendly club newcomer.', skill: 4, depth: 5, movetime: 300, random: 0 },
-    { name: 'Club player', blurb: 'Notices loose pieces and punishes them.', skill: 9, depth: 8, movetime: 500, random: 0 },
-    { name: 'Strong', blurb: 'A solid tournament player. Expect a real fight.', skill: 15, depth: 12, movetime: 800, random: 0 },
-    { name: 'Full Stockfish', blurb: 'Full strength. Mostly for watching how the engine plays.', skill: 20, depth: 18, movetime: 1500, random: 0 }
+    { name: 'Rookie', glyph: '♟', blurb: 'Leaves pieces hanging often. Good for your very first games.', skill: 0, depth: 1, movetime: 80, random: 0.35 },
+    { name: 'Beginner', glyph: '♞', blurb: 'Makes sensible moves but misses simple tactics.', skill: 0, depth: 3, movetime: 150, random: 0.12 },
+    { name: 'Casual', glyph: '♝', blurb: 'Plays like a friendly club newcomer.', skill: 4, depth: 5, movetime: 300, random: 0 },
+    { name: 'Club player', glyph: '♜', blurb: 'Notices loose pieces and punishes them.', skill: 9, depth: 8, movetime: 500, random: 0 },
+    { name: 'Strong', glyph: '♛', blurb: 'A solid tournament player. Expect a real fight.', skill: 15, depth: 12, movetime: 800, random: 0 },
+    { name: 'Full Stockfish', glyph: '♚', blurb: 'Full strength. Mostly for watching how the engine plays.', skill: 20, depth: 18, movetime: 1500, random: 0 }
   ];
 
   var ANALYSIS = { depth: 12, movetime: 900 };
@@ -1109,7 +1109,11 @@
     bankedThisGame: 0,
     closeGuard: null,
     engineNoticeShown: false,
+    engineNotice: null,
     soundOn: true,
+    boardTheme: 'green',
+    boardThemeChosen: false,
+    started: false,
     viewPly: null, // null = live position; a number = replaying that ply
     liveEval: null,
     summaryStartPly: 0,
@@ -1132,6 +1136,10 @@
       if (typeof s.levelIndex === 'number' && s.levelIndex >= 0 && s.levelIndex < LEVELS.length) S.levelIndex = s.levelIndex;
       if (s.colorChoice === 'w' || s.colorChoice === 'b' || s.colorChoice === 'random') S.colorChoice = s.colorChoice;
       if (typeof s.soundOn === 'boolean') S.soundOn = s.soundOn;
+      if (s.boardThemeChosen === true && (s.boardTheme === 'grey' || s.boardTheme === 'green' || s.boardTheme === 'brown')) {
+        S.boardTheme = s.boardTheme;
+        S.boardThemeChosen = true;
+      }
     } catch (e) {
       /* keep defaults */
     }
@@ -1143,7 +1151,9 @@
       showEval: S.showEval,
       levelIndex: S.levelIndex,
       colorChoice: S.colorChoice,
-      soundOn: S.soundOn
+      soundOn: S.soundOn,
+      boardTheme: S.boardTheme,
+      boardThemeChosen: S.boardThemeChosen
     }));
   }
 
@@ -1163,10 +1173,12 @@
     if (s.reason) ui.enginePill.title = s.reason;
     if (s.state === 'fallback' && !S.engineNoticeShown) {
       S.engineNoticeShown = true;
-      pushNotes([{ tone: 'warn', icon: '!', text: "Stockfish couldn't be downloaded, so a smaller backup engine is running. Coach Guard still works, just with less depth." }], 'Engine');
+      S.engineNotice = { tone: 'warn', icon: '!', text: "Stockfish couldn't be downloaded, so a smaller backup engine is running. Coach Guard still works, just with less depth." };
+      pushNotes([S.engineNotice], 'Engine');
     }
     if (s.state === 'error') {
-      pushNotes([{ tone: 'bad', icon: '✕', text: 'No chess engine could be started, so Coach Guard and move ratings are paused and the bot plays simple moves. Reload the page to try again.' }], 'Engine');
+      S.engineNotice = { tone: 'bad', icon: '✕', text: 'No chess engine could be started, so Coach Guard and move ratings are paused and the bot plays simple moves. Reload the page to try again.' };
+      pushNotes([S.engineNotice], 'Engine');
       if (S.phase === 'checking' || S.phase === 'player') refreshStatusForPhase();
     }
     if (s.state === 'ready' && S.phase === 'bot') {
@@ -1300,10 +1312,16 @@
     var topColor = C.opposite(S.orientation);
     var bottomColor = S.orientation;
     var lvl = LEVELS[S.levelIndex];
-    function fill(color, nameEl, capsEl, advEl, avatarEl) {
+    function fill(color, nameEl, sideEl, capsEl, advEl, avatarEl) {
       var isMe = color === S.playerColor;
-      nameEl.textContent = isMe ? 'You, playing ' + C.COLOR_NAMES[color] : lvl.name + ' bot, playing ' + C.COLOR_NAMES[color];
-      avatarEl.textContent = isMe ? '♔' : '♞';
+      if (S.started) {
+        nameEl.textContent = isMe ? 'You' : lvl.name + ' bot';
+        sideEl.textContent = C.COLOR_NAMES[color];
+      } else {
+        nameEl.textContent = isMe ? 'You' : 'Opponent';
+        sideEl.textContent = '';
+      }
+      avatarEl.textContent = isMe ? '♔' : (S.started ? lvl.glyph : '?');
       avatarEl.classList.toggle('avatar-you', isMe);
       capsEl.innerHTML = '';
       var list = color === 'w' ? caps.byWhite : caps.byBlack;
@@ -1311,8 +1329,8 @@
       var diff = color === 'w' ? caps.diff : -caps.diff;
       advEl.textContent = diff > 0 ? '+' + diff : '';
     }
-    fill(topColor, ui.topName, ui.topCaps, ui.topAdv, ui.topAvatar);
-    fill(bottomColor, ui.bottomName, ui.bottomCaps, ui.bottomAdv, ui.bottomAvatar);
+    fill(topColor, ui.topName, ui.topSide, ui.topCaps, ui.topAdv, ui.topAvatar);
+    fill(bottomColor, ui.bottomName, ui.bottomSide, ui.bottomCaps, ui.bottomAdv, ui.bottomAvatar);
   }
 
   function lastMoveMark() {
@@ -1381,11 +1399,12 @@
     syncBoard(false);
     resetEval();
     ui.feed.innerHTML = '';
+    S.started = true;
     renderMoveList();
     renderStrips();
-    updatePlayAsHelp();
     engine.newGame();
     Sound.play('start');
+    if (S.engineNotice) pushNotes([S.engineNotice], 'Engine');
     pushNotes([{
       tone: 'tip',
       icon: '♔',
@@ -1413,10 +1432,14 @@
     S.orientation = data.playerColor;
     S.gameId = typeof data.gameId === 'string' ? data.gameId : makeId();
     S.viewPly = null;
+    S.started = true;
     resetReview();
     syncBoard(false);
     renderMoveList();
     renderStrips();
+    showPane('game');
+    ui.feed.innerHTML = '';
+    if (S.engineNotice) pushNotes([S.engineNotice], 'Engine');
     pushNotes([{ tone: 'tip', icon: '♔', text: 'Welcome back. Your game is restored right where you left it.' }], 'Resumed');
     if (S.game.turn() === S.playerColor) playerTurn(null);
     else botTurn();
@@ -1684,6 +1707,7 @@
 
   function endGame(term) {
     S.phase = 'over';
+    showPane('game');
     store.remove(GAME_KEY);
     var text;
     var playerWon = false;
@@ -1934,9 +1958,75 @@
     renderStrips();
   }
 
-  function updatePlayAsHelp() {
-    var hasMoves = S.game.history().length > 0 && S.phase !== 'over';
-    ui.playAsHelp.textContent = hasMoves ? 'Takes effect when you start a new game.' : 'Changing this starts a fresh game.';
+  /** Start screen: empty-handed board, bot cards open in the panel. */
+  function showHome() {
+    S.started = false;
+    S.phase = 'idle';
+    S.game = new window.Chess();
+    S.playerColor = S.colorChoice === 'b' ? 'b' : 'w';
+    S.orientation = S.playerColor;
+    S.viewPly = null;
+    resetReview();
+    syncBoard(false);
+    resetEval();
+    renderMoveList();
+    renderStrips();
+    renderReviewBar();
+    setStatus('Choose a bot to start.', 'you', 'Pick a level under New game. Coach Guard watches every move you make.');
+    refreshControls();
+    showPane('new');
+  }
+
+  function showPane(name) {
+    ['game', 'new', 'settings'].forEach(function (p) {
+      var on = p === name;
+      var tab = $('ptab-' + p);
+      tab.setAttribute('aria-selected', String(on));
+      tab.tabIndex = on ? 0 : -1;
+      $('pane-' + p).hidden = !on;
+    });
+  }
+
+  function renderLevelCards() {
+    var wrap = ui.levelCards;
+    wrap.innerHTML = '';
+    LEVELS.forEach(function (lvl, i) {
+      var card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'menu-card';
+      card.dataset.level = String(i);
+      card.setAttribute('aria-label', 'Play the ' + lvl.name + ' bot. ' + lvl.blurb);
+      var icon = document.createElement('span');
+      icon.className = 'menu-icon';
+      icon.setAttribute('aria-hidden', 'true');
+      icon.textContent = lvl.glyph;
+      var text = document.createElement('span');
+      text.className = 'menu-text';
+      var title = document.createElement('span');
+      title.className = 'menu-title';
+      title.textContent = lvl.name;
+      if (i === S.levelIndex) {
+        var tag = document.createElement('span');
+        tag.className = 'menu-tag';
+        tag.textContent = 'Last used';
+        title.appendChild(tag);
+      }
+      var sub = document.createElement('span');
+      sub.className = 'menu-sub';
+      sub.textContent = lvl.blurb;
+      text.appendChild(title);
+      text.appendChild(sub);
+      card.appendChild(icon);
+      card.appendChild(text);
+      wrap.appendChild(card);
+    });
+  }
+
+  function applyBoardTheme() {
+    document.body.dataset.board = S.boardTheme;
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="boardTheme"]'), function (input) {
+      input.checked = input.value === S.boardTheme;
+    });
   }
 
   /* ======================================================================== */
@@ -2073,6 +2163,9 @@
       clearTimeout(this.timer);
       this.epoch++;
       this.phase = 'idle';
+      this.board.setFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+      this.board.setMarks({ lastMove: null, check: null, danger: [], hint: [] });
+      this.board.setArrows([]);
       $('puzzleArea').hidden = true;
       $('puzzleIntro').hidden = false;
       var n = C.BlunderBank.count();
@@ -2322,9 +2415,9 @@
       btnFlip: $('btnFlip'),
       guardToggle: $('guardToggle'),
       evalToggle: $('evalToggle'),
-      levelSelect: $('levelSelect'),
-      levelBlurb: $('levelBlurb'),
-      playAsHelp: $('playAsHelp'),
+      levelCards: $('levelCards'),
+      topSide: $('topSide'),
+      bottomSide: $('bottomSide'),
       topName: $('topName'),
       topCaps: $('topCaps'),
       topAdv: $('topAdv'),
@@ -2363,20 +2456,39 @@
       onMove: function (from, to) { onPlayerMove(from, to); }
     });
 
-    LEVELS.forEach(function (lvl, i) {
-      var opt = document.createElement('option');
-      opt.value = String(i);
-      opt.textContent = lvl.name;
-      ui.levelSelect.appendChild(opt);
-    });
-    ui.levelSelect.value = String(S.levelIndex);
-    ui.levelBlurb.textContent = LEVELS[S.levelIndex].blurb;
-    ui.levelSelect.addEventListener('change', function () {
-      S.levelIndex = parseInt(ui.levelSelect.value, 10) || 0;
-      ui.levelBlurb.textContent = LEVELS[S.levelIndex].blurb;
+    renderLevelCards();
+    ui.levelCards.addEventListener('click', function (e) {
+      var card = e.target.closest('[data-level]');
+      if (!card || S.phase === 'warning' || S.phase === 'promoting') return;
+      S.levelIndex = parseInt(card.dataset.level, 10) || 0;
       saveSettings();
-      renderStrips();
-      pushNotes([{ tone: 'tip', icon: '♞', text: 'Bot level set to ' + LEVELS[S.levelIndex].name + '. It applies from the next bot move.' }], 'Settings');
+      renderLevelCards();
+      newGame();
+      showPane('game');
+    });
+
+    // Right-panel tabs
+    ['game', 'new', 'settings'].forEach(function (p, i, all) {
+      var tab = $('ptab-' + p);
+      tab.addEventListener('click', function () { showPane(p); });
+      tab.addEventListener('keydown', function (e) {
+        if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+        e.preventDefault();
+        var next = all[(i + (e.key === 'ArrowRight' ? 1 : all.length - 1)) % all.length];
+        showPane(next);
+        $('ptab-' + next).focus();
+      });
+    });
+
+    applyBoardTheme();
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="boardTheme"]'), function (input) {
+      input.addEventListener('change', function () {
+        if (!input.checked) return;
+        S.boardTheme = input.value;
+        S.boardThemeChosen = true;
+        applyBoardTheme();
+        saveSettings();
+      });
     });
 
     ui.guardToggle.setAttribute('aria-checked', String(S.guardOn));
@@ -2406,13 +2518,11 @@
         if (!input.checked) return;
         S.colorChoice = input.value;
         saveSettings();
-        var fresh = S.game.history().length === 0 || S.phase === 'over';
-        if (fresh && S.phase !== 'warning' && S.phase !== 'promoting') newGame();
-        else updatePlayAsHelp();
+        if (!S.started) showHome();
       });
     });
 
-    ui.btnNewGame.addEventListener('click', newGame);
+    ui.btnNewGame.addEventListener('click', function () { showPane('new'); });
     ui.btnTakeBack.addEventListener('click', takeBack);
     ui.btnHint.addEventListener('click', showHint);
     ui.btnFlip.addEventListener('click', flipBoard);
@@ -2509,7 +2619,7 @@
     Bank.init();
     updateBankBadge();
     engine.start();
-    if (!restoreGame()) newGame();
+    if (!restoreGame()) showHome();
     if (location.hash === '#bank') showTab('bank');
   }
 

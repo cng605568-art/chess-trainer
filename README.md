@@ -33,12 +33,16 @@ npx serve .            # or: python3 -m http.server 8000
 
 Then open `http://localhost:3000` (or `:8000`).
 
+## Layout
+
+A sidebar on the left switches between **Play** and **Blunder Bank**. The board sits in the middle with player bars above and below it. The right panel has three tabs: **Game** (status, controls, game summary, coach notes, moves), **New game** (choose your colour and pick a bot from six cards) and **Settings** (Coach Guard, evaluation bar, sounds, board colour). On phones the sidebar becomes a top bar and the panel moves below the board.
+
 ## What's inside
 
 | File | Job |
 | --- | --- |
-| `index.html` | Layout, Tailwind CDN, chess.js CDN, Cburnett piece SVGs, promotion and Coach Guard modals |
-| `style.css` | Board, highlights, danger pulse, dark theme, responsive rules |
+| `index.html` | Sidebar, board, right panel with Game / New game / Settings tabs, Tailwind CDN, chess.js CDN, Cburnett piece SVGs, promotion and Coach Guard modals |
+| `style.css` | Grey theme, board colours, highlights, danger pulse, menu cards, responsive rules |
 | `stockfish-worker.js` | Web Worker that loads Stockfish 10 from cdnjs (jsDelivr as backup) and answers search requests as JSON. Falls back to a small built-in engine if both CDNs are blocked |
 | `coach.js` | Plain-English move explanations (hanging pieces, checks, center control, castling, evaluation swings) and the Blunder Bank storage |
 | `app.js` | Board rendering and piece animation, click or drag to move, pawn promotion, sound effects, the game loop, Coach Guard, replay, game summary, puzzle trainer |
@@ -46,7 +50,7 @@ Then open `http://localhost:3000` (or `:8000`).
 
 ## How the features work
 
-**Coach Guard.** While you think, Stockfish evaluates the position. When you move, it evaluates the new position too. If your move drops the evaluation by more than 1.5 pawns (scores are capped at ±10 so mates and huge leads don't trigger false alarms), the move pauses, the threatened square pulses red, and you choose **Undo & Rethink** or **Play Anyway**. Turn the guard off in the side panel to play freely.
+**Coach Guard.** While you think, Stockfish evaluates the position. When you move, it evaluates the new position too. If your move drops the evaluation by more than 1.5 pawns (scores are capped at ±10 so mates and huge leads don't trigger false alarms), the move pauses, the threatened square pulses red, and you choose **Undo & Rethink** or **Play Anyway**. Turn the guard off in the Settings tab of the right panel to play freely.
 
 **Coach notes.** After each move, deterministic rules in `coach.js` describe what happened in beginner language: captures, checks, castling, central pawns, development, early queen moves, loose pieces, and when the bot slips up.
 
@@ -54,7 +58,7 @@ Then open `http://localhost:3000` (or `:8000`).
 
 **Bot levels.** Six levels, from Rookie (plays random moves part of the time) up to full-strength Stockfish, using Stockfish's `Skill Level` option.
 
-**Sounds.** Wooden piece clicks for moves and captures, a double click for castling, chimes for check, promotion, hints and solved puzzles, a low two-note alert when Coach Guard steps in, and short tunes for a win, loss or draw. They are generated in the browser with the Web Audio API, so there are no audio files to download or license. Turn them off in the side panel.
+**Sounds.** Wooden piece clicks for moves and captures, a double click for castling, chimes for check, promotion, hints and solved puzzles, a low two-note alert when Coach Guard steps in, and short tunes for a win, loss or draw. They are generated in the browser with the Web Audio API, so there are no audio files to download or license. Turn them off in the Settings tab, where you can also switch the board between green (the default), grey and brown.
 
 **Game summary and replay.** When a game ends, the side panel shows how your moves were rated (best, good, inaccuracies, mistakes, blunders), how many times Coach Guard saved you, and a graph of who was ahead. Click the graph, any move in the move list, or use the arrow keys to step back through the game. Moves marked `?!`, `?` and `??` in the list are your inaccuracies, mistakes and blunders.
 
@@ -72,7 +76,7 @@ Then open `http://localhost:3000` (or `:8000`).
 - Blunder threshold: `BLUNDER_CP` in `coach.js` (centipawns, default `150`).
 - Coach analysis depth and time: `ANALYSIS` in `app.js`.
 - Bot levels: the `LEVELS` array in `app.js`.
-- Board colours: `--sq-light` and `--sq-dark` in `style.css`.
+- Board colours: the `body[data-board="…"]` rules at the top of `style.css`.
 
 ## Credits and licenses
 
