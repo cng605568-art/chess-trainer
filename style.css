@@ -1357,6 +1357,232 @@ body.hide-eval .eval-chip {
 }
 
 /* ------------------------------------------------------------------------ */
+/* Animation, replay and game summary                                       */
+/* ------------------------------------------------------------------------ */
+
+.piece-slot.is-moving {
+  z-index: 6;
+}
+
+.panel-help {
+  margin: -6px 0 10px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.movelist {
+  position: relative;
+}
+
+button.move-san {
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+button.move-san:hover {
+  background: var(--panel-2);
+}
+
+.move-san[data-note]::after {
+  content: attr(data-note);
+  margin-left: 1px;
+}
+
+.move-san.q-blunder::after {
+  color: var(--flag);
+}
+
+.move-san.q-mistake::after {
+  color: var(--warn);
+}
+
+.move-san.q-inaccuracy::after {
+  color: var(--info);
+}
+
+.move-san.is-current::after {
+  color: inherit;
+}
+
+.review-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 6px;
+  border: 1px solid rgba(143, 196, 255, 0.4);
+  border-radius: 12px;
+  background: rgba(143, 196, 255, 0.07);
+}
+
+.review-label {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-icon {
+  width: 42px;
+  padding: 0;
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.board-row.is-reviewing .board {
+  box-shadow: 0 0 0 3px rgba(143, 196, 255, 0.8), 0 20px 44px -22px rgba(0, 0, 0, 0.85);
+}
+
+.summary-panel {
+  border-color: rgba(216, 171, 79, 0.6);
+}
+
+.summary-result {
+  margin: 0 0 12px;
+  font-size: 1.3rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.evalgraph {
+  margin: 0 0 14px;
+}
+
+.evalgraph svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  background: var(--felt);
+  cursor: pointer;
+}
+
+.evalgraph-caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--faint);
+  font-size: 0.78rem;
+}
+
+.eg-mid {
+  stroke: rgba(216, 171, 79, 0.6);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.eg-area-up {
+  fill: rgba(99, 209, 143, 0.3);
+}
+
+.eg-area-down {
+  fill: rgba(239, 76, 76, 0.28);
+}
+
+.eg-line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+.eg-dot {
+  stroke: var(--felt);
+  stroke-width: 1.5;
+}
+
+.eg-dot-blunder {
+  fill: var(--flag);
+}
+
+.eg-dot-mistake {
+  fill: var(--warn);
+}
+
+.eg-empty {
+  fill: var(--faint);
+  font-size: 11px;
+}
+
+.quality-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 18px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.quality-grid li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.q-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.q-label {
+  flex: 1;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.q-count {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.q-best .q-dot {
+  background: var(--good);
+}
+
+.q-good .q-dot {
+  background: var(--ink);
+}
+
+.q-inaccuracy .q-dot {
+  background: var(--info);
+}
+
+.q-mistake .q-dot {
+  background: var(--warn);
+}
+
+.q-blunder .q-dot {
+  background: var(--flag);
+}
+
+.q-blunder .q-count {
+  color: #ff8a8a;
+}
+
+.summary-line {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.summary-actions .btn {
+  flex: 1 1 auto;
+}
+
+/* ------------------------------------------------------------------------ */
 /* Footer and misc                                                          */
 /* ------------------------------------------------------------------------ */
 

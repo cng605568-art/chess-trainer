@@ -138,6 +138,13 @@
           <span class="strip-adv" id="bottomAdv"></span>
         </div>
 
+        <div class="review-bar" id="reviewBar" hidden>
+          <button type="button" class="btn btn-ghost btn-icon" id="btnPrev" aria-label="Previous move">‹</button>
+          <span class="review-label" id="reviewLabel" aria-live="polite">Start position</span>
+          <button type="button" class="btn btn-ghost btn-icon" id="btnNext" aria-label="Next move">›</button>
+          <button type="button" class="btn btn-primary" id="btnLive">Back to game</button>
+        </div>
+
         <div class="controls" role="toolbar" aria-label="Game controls">
           <button type="button" class="btn btn-primary" id="btnNewGame">New game</button>
           <button type="button" class="btn btn-ghost" id="btnTakeBack">Take back</button>
@@ -158,6 +165,27 @@
           </div>
         </div>
 
+        <div class="panel summary-panel" id="summaryPanel" hidden>
+          <h2 class="panel-title font-display">Game summary</h2>
+          <p class="summary-result font-display" id="summaryResult"></p>
+          <figure class="evalgraph">
+            <svg id="evalGraph" viewBox="0 0 300 96" role="img" aria-label="How the evaluation changed during the game, from your side. Click to replay that moment."></svg>
+            <figcaption class="evalgraph-caption"><span>Above the line, you were better</span><span>Click the graph to replay</span></figcaption>
+          </figure>
+          <ul class="quality-grid" aria-label="How your moves were rated">
+            <li class="q-best"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Best</span><span class="q-count" data-q="best">0</span></li>
+            <li class="q-good"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Good</span><span class="q-count" data-q="good">0</span></li>
+            <li class="q-inaccuracy"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Inaccuracies</span><span class="q-count" data-q="inaccuracy">0</span></li>
+            <li class="q-mistake"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Mistakes</span><span class="q-count" data-q="mistake">0</span></li>
+            <li class="q-blunder"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Blunders</span><span class="q-count" data-q="blunder">0</span></li>
+          </ul>
+          <p class="summary-line" id="summaryLine"></p>
+          <div class="summary-actions">
+            <button type="button" class="btn btn-primary" id="btnSummaryBank">Practice these blunders</button>
+            <button type="button" class="btn btn-ghost" id="btnSummaryReview">Replay the game</button>
+          </div>
+        </div>
+
         <div class="panel settings">
           <div class="setting">
             <div class="setting-text">
@@ -172,6 +200,13 @@
               <span class="setting-help">Shows who is ahead, from White's side.</span>
             </div>
             <button type="button" class="switch" id="evalToggle" role="switch" aria-checked="true" aria-labelledby="evalLabelName"><span class="switch-knob"></span></button>
+          </div>
+          <div class="setting">
+            <div class="setting-text">
+              <span class="setting-name" id="soundLabel">Sounds</span>
+              <span class="setting-help" id="soundHelp">Piece clicks, check alerts and coach chimes.</span>
+            </div>
+            <button type="button" class="switch" id="soundToggle" role="switch" aria-checked="true" aria-labelledby="soundLabel" aria-describedby="soundHelp"><span class="switch-knob"></span></button>
           </div>
           <div class="setting setting-stack">
             <label class="setting-name" for="levelSelect">Bot level</label>
@@ -196,6 +231,7 @@
 
         <div class="panel">
           <h2 class="panel-title font-display">Moves</h2>
+          <p class="panel-help">Click a move, or use the ← → keys, to look back through the game.</p>
           <ol class="movelist" id="moveList"></ol>
         </div>
       </aside>

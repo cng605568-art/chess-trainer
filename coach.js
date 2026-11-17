@@ -278,6 +278,7 @@
   function formatEval(cp) {
     if (isMateScore(cp)) {
       var n = mateDistance(cp);
+      if (n === 0) return cp > 0 ? '1-0' : '0-1'; // checkmate already on the board
       return (cp < 0 ? '−' : '') + 'M' + n;
     }
     var pawns = cp / 100;
@@ -847,6 +848,8 @@
     MATE_CP: MATE_CP,
     CLAMP_CP: CLAMP_CP,
     BLUNDER_CP: BLUNDER_CP,
+    MISTAKE_CP: MISTAKE_CP,
+    INACCURACY_CP: INACCURACY_CP,
     sqToIdx: sqToIdx,
     idxToSq: idxToSq,
     opposite: opposite,

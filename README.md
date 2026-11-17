@@ -41,7 +41,7 @@ Then open `http://localhost:3000` (or `:8000`).
 | `style.css` | Board, highlights, danger pulse, dark theme, responsive rules |
 | `stockfish-worker.js` | Web Worker that loads Stockfish 10 from cdnjs (jsDelivr as backup) and answers search requests as JSON. Falls back to a small built-in engine if both CDNs are blocked |
 | `coach.js` | Plain-English move explanations (hanging pieces, checks, center control, castling, evaluation swings) and the Blunder Bank storage |
-| `app.js` | Board rendering, click or drag to move, pawn promotion, the game loop, Coach Guard, puzzle trainer |
+| `app.js` | Board rendering and piece animation, click or drag to move, pawn promotion, sound effects, the game loop, Coach Guard, replay, game summary, puzzle trainer |
 | `vercel.json` | `cleanUrls` so Vercel serves `index.html` at `/` |
 
 ## How the features work
@@ -53,6 +53,19 @@ Then open `http://localhost:3000` (or `:8000`).
 **My Blunder Bank.** Every blunder is saved (position + Stockfish's best move), whether the guard caught it or not. In the Blunder Bank tab you replay the position and look for a better move. Stockfish's move, or any move that keeps the position within 0.6 pawns of it, solves the puzzle and clears it from the queue.
 
 **Bot levels.** Six levels, from Rookie (plays random moves part of the time) up to full-strength Stockfish, using Stockfish's `Skill Level` option.
+
+**Sounds.** Wooden piece clicks for moves and captures, a double click for castling, chimes for check, promotion, hints and solved puzzles, a low two-note alert when Coach Guard steps in, and short tunes for a win, loss or draw. They are generated in the browser with the Web Audio API, so there are no audio files to download or license. Turn them off in the side panel.
+
+**Game summary and replay.** When a game ends, the side panel shows how your moves were rated (best, good, inaccuracies, mistakes, blunders), how many times Coach Guard saved you, and a graph of who was ahead. Click the graph, any move in the move list, or use the arrow keys to step back through the game. Moves marked `?!`, `?` and `??` in the list are your inaccuracies, mistakes and blunders.
+
+## Keyboard
+
+| Key | Action |
+| --- | --- |
+| ← / → | Step back or forward through the game |
+| Home / End | Jump to the start, or back to the live position |
+| Esc | In the Coach Guard banner: Undo & Rethink. In the promotion picker: cancel |
+| Q / R / B / N | Pick a promotion piece |
 
 ## Changing things
 
