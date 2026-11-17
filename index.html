@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Second Look: chess trainer with a live coach</title>
+  <meta name="description" content="Play Stockfish with a coach that stops your blunders before they happen, explains every move in plain English, and turns your mistakes into puzzles.">
+  <meta name="theme-color" content="#10201b">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2310201b'/%3E%3Ctext x='32' y='48' font-size='44' text-anchor='middle' fill='%23d8ab4f'%3E%E2%99%9E%3C/text%3E%3C/svg%3E">
+
+  <!-- Fonts: Bricolage Grotesque for headings, Atkinson Hyperlegible for body text -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:wght@600;800&display=swap">
+
+  <!-- Cburnett chess pieces (CC BY-SA 3.0) from Wikimedia Commons -->
+  <link rel="preconnect" href="https://upload.wikimedia.org" crossorigin>
+  <link rel="preload" as="image" href="https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg">
+  <link rel="preload" as="image" href="https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg">
+  <link rel="preload" as="image" href="https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg">
+  <link rel="preload" as="image" href="https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg">
+  <link rel="preload" as="image" href="https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg">
+  <link rel="preload" as="image" href="https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg">
+  <link rel="preload" as="image" href="https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg">
+  <link rel="preload" as="image" href="https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg">
+  <link rel="preload" as="image" href="https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg">
+  <link rel="preload" as="image" href="https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg">
+  <link rel="preload" as="image" href="https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg">
+  <link rel="preload" as="image" href="https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg">
+  <script>
+    window.PIECE_SET = {
+      name: 'Cburnett',
+      credit: 'Pieces by Cburnett, CC BY-SA 3.0, via Wikimedia Commons',
+      urls: {
+        wK: 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg',
+        wQ: 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg',
+        wR: 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg',
+        wB: 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg',
+        wN: 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg',
+        wP: 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg',
+        bK: 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg',
+        bQ: 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg',
+        bR: 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg',
+        bB: 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg',
+        bN: 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg',
+        bP: 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg'
+      }
+    };
+  </script>
+
+  <!-- Tailwind CSS (Play CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    if (window.tailwind) {
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              felt: '#10201b',
+              'felt-2': '#142821',
+              panel: '#172b25',
+              'panel-2': '#1e352d',
+              line: '#2b4a3f',
+              ink: '#eceadf',
+              muted: '#a3b8ae',
+              faint: '#76918a',
+              brass: '#d8ab4f',
+              flag: '#ef4c4c',
+              good: '#63d18f'
+            },
+            fontFamily: {
+              display: ['"Bricolage Grotesque"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+              sans: ['"Atkinson Hyperlegible"', 'ui-sans-serif', 'system-ui', '-apple-system', '"Segoe UI"', 'Roboto', 'sans-serif']
+            }
+          }
+        }
+      };
+    }
+  </script>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body class="min-h-screen bg-felt text-ink font-sans antialiased">
+  <a href="#board" class="skip-link">Skip to the board</a>
+
+  <header class="site-header border-b border-line">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 py-3 flex flex-wrap items-center gap-x-6 gap-y-3">
+      <a href="./" class="brand" aria-label="Second Look, home">
+        <span class="brand-mark" aria-hidden="true">♞</span>
+        <span class="brand-text">
+          <span class="brand-name font-display">Second Look</span>
+          <span class="brand-tag">Chess practice with a coach at your shoulder</span>
+        </span>
+      </a>
+
+      <nav class="tabs" role="tablist" aria-label="Sections">
+        <button type="button" class="tab" role="tab" id="tab-play" aria-controls="view-play" aria-selected="true">Practice</button>
+        <button type="button" class="tab" role="tab" id="tab-bank" aria-controls="view-bank" aria-selected="false" tabindex="-1">
+          My Blunder Bank <span class="tab-badge" id="bankBadge" aria-label="saved blunders">0</span>
+        </button>
+      </nav>
+
+      <div class="engine-pill ml-auto" id="enginePill" data-state="loading" role="status" aria-live="polite">
+        <span class="engine-dot" aria-hidden="true"></span>
+        <span id="engineText">Loading Stockfish…</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-7xl px-4 sm:px-6 py-5 sm:py-7">
+    <!-- ================================================================ -->
+    <!-- Practice                                                          -->
+    <!-- ================================================================ -->
+    <section id="view-play" role="tabpanel" aria-labelledby="tab-play" class="view grid gap-6 lg:gap-8 lg:grid-cols-[minmax(0,1fr)_380px] items-start">
+      <div class="play-col">
+        <div class="player-strip" id="stripTop">
+          <span class="avatar" id="topAvatar" aria-hidden="true">♞</span>
+          <div class="strip-text">
+            <span class="strip-name" id="topName">Bot</span>
+            <span class="strip-caps" id="topCaps"></span>
+          </div>
+          <span class="strip-adv" id="topAdv"></span>
+        </div>
+
+        <div class="board-row" id="boardWrap">
+          <div class="evalbar" id="evalBar" role="img" aria-label="Evaluation: equal">
+            <div class="evalbar-fill" id="evalFill"></div>
+            <div class="evalbar-mid" aria-hidden="true"></div>
+          </div>
+          <div id="board" class="board" tabindex="-1" aria-label="Chess board. Click a piece, then click the square to move it."></div>
+        </div>
+
+        <div class="player-strip" id="stripBottom">
+          <span class="avatar avatar-you" id="bottomAvatar" aria-hidden="true">♔</span>
+          <div class="strip-text">
+            <span class="strip-name" id="bottomName">You</span>
+            <span class="strip-caps" id="bottomCaps"></span>
+          </div>
+          <span class="strip-adv" id="bottomAdv"></span>
+        </div>
+
+        <div class="controls" role="toolbar" aria-label="Game controls">
+          <button type="button" class="btn btn-primary" id="btnNewGame">New game</button>
+          <button type="button" class="btn btn-ghost" id="btnTakeBack">Take back</button>
+          <button type="button" class="btn btn-ghost" id="btnHint">Show hint</button>
+          <button type="button" class="btn btn-ghost" id="btnFlip">Flip board</button>
+        </div>
+      </div>
+
+      <aside class="side-col flex flex-col gap-4" aria-label="Coach panel">
+        <div class="panel status-panel">
+          <div class="flex items-start gap-3">
+            <span class="status-dot" id="statusDot" data-kind="busy" aria-hidden="true"></span>
+            <div class="min-w-0">
+              <p class="status-text font-display" id="statusText" role="status" aria-live="polite">Setting up the board…</p>
+              <p class="status-sub" id="statusSub">The engine is loading. This takes a few seconds the first time.</p>
+            </div>
+            <span class="eval-chip ml-auto" id="evalChip" title="Engine evaluation from White's side">0.0</span>
+          </div>
+        </div>
+
+        <div class="panel settings">
+          <div class="setting">
+            <div class="setting-text">
+              <span class="setting-name" id="guardLabel">Coach Guard</span>
+              <span class="setting-help" id="guardHelp">Checks each move with Stockfish and pauses you if it would drop more than 1.5 pawns.</span>
+            </div>
+            <button type="button" class="switch" id="guardToggle" role="switch" aria-checked="true" aria-labelledby="guardLabel" aria-describedby="guardHelp"><span class="switch-knob"></span></button>
+          </div>
+          <div class="setting">
+            <div class="setting-text">
+              <span class="setting-name" id="evalLabelName">Evaluation bar</span>
+              <span class="setting-help">Shows who is ahead, from White's side.</span>
+            </div>
+            <button type="button" class="switch" id="evalToggle" role="switch" aria-checked="true" aria-labelledby="evalLabelName"><span class="switch-knob"></span></button>
+          </div>
+          <div class="setting setting-stack">
+            <label class="setting-name" for="levelSelect">Bot level</label>
+            <select id="levelSelect" class="select"></select>
+            <span class="setting-help" id="levelBlurb"></span>
+          </div>
+          <fieldset class="setting setting-stack">
+            <legend class="setting-name">Play as</legend>
+            <div class="segmented" role="radiogroup" aria-label="Play as">
+              <label><input type="radio" name="playAs" value="w" checked><span>White</span></label>
+              <label><input type="radio" name="playAs" value="b"><span>Black</span></label>
+              <label><input type="radio" name="playAs" value="random"><span>Random</span></label>
+            </div>
+            <span class="setting-help" id="playAsHelp">Takes effect when you start a new game.</span>
+          </fieldset>
+        </div>
+
+        <div class="panel">
+          <h2 class="panel-title font-display">Coach notes</h2>
+          <ol class="feed" id="feed" aria-live="polite" aria-relevant="additions"></ol>
+        </div>
+
+        <div class="panel">
+          <h2 class="panel-title font-display">Moves</h2>
+          <ol class="movelist" id="moveList"></ol>
+        </div>
+      </aside>
+    </section>
+
+    <!-- ================================================================ -->
+    <!-- My Blunder Bank                                                   -->
+    <!-- ================================================================ -->
+    <section id="view-bank" role="tabpanel" aria-labelledby="tab-bank" class="view" hidden>
+      <div class="grid gap-6 lg:gap-8 lg:grid-cols-[360px_minmax(0,1fr)] items-start">
+        <aside class="panel bank-panel" aria-label="Saved blunders">
+          <h1 class="bank-title font-display">My Blunder Bank</h1>
+          <p class="bank-intro">Every blunder you make in Practice lands here as a puzzle. Find the better move to clear it for good.</p>
+          <p class="bank-stats" id="bankStats"></p>
+          <ul class="bank-list" id="bankList"></ul>
+          <div class="bank-empty" id="bankEmpty" hidden>
+            <p class="font-display bank-empty-title">Nothing to fix yet</p>
+            <p>Play a game in Practice. When Stockfish spots a blunder, the position is saved here so you can solve it later.</p>
+            <button type="button" class="btn btn-primary mt-4" data-goto="play">Go to Practice</button>
+          </div>
+          <button type="button" class="btn btn-quiet mt-4" id="btnClearBank">Remove all saved blunders</button>
+        </aside>
+
+        <div class="puzzle-col">
+          <div class="panel puzzle-intro" id="puzzleIntro">
+            <p class="font-display puzzle-intro-title">Turn your mistakes into practice</p>
+            <p class="text-muted" id="puzzleIntroText">Pick a blunder from the list to replay it.</p>
+            <button type="button" class="btn btn-primary mt-4" id="btnStartBank">Start with the newest</button>
+          </div>
+
+          <div class="puzzle-area" id="puzzleArea" hidden>
+            <div class="puzzle-head">
+              <h2 class="puzzle-title font-display" id="puzzleTitle">Find a better move</h2>
+              <p class="puzzle-text" id="puzzleText"></p>
+            </div>
+            <div class="board-row board-row-puzzle">
+              <div id="puzzleBoard" class="board" tabindex="-1" aria-label="Puzzle board"></div>
+            </div>
+            <p class="puzzle-feedback" id="puzzleFeedback" data-tone="neutral" role="status" aria-live="polite"></p>
+            <div class="controls" role="toolbar" aria-label="Puzzle controls">
+              <button type="button" class="btn btn-ghost" id="btnPuzzleHint">Show hint</button>
+              <button type="button" class="btn btn-ghost" id="btnPuzzleSolution">Show solution</button>
+              <button type="button" class="btn btn-ghost" id="btnPuzzleRetry" hidden>Try again</button>
+              <button type="button" class="btn btn-primary" id="btnPuzzleNext">Next puzzle</button>
+              <button type="button" class="btn btn-quiet" id="btnPuzzleRemove">Remove from bank</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer mx-auto max-w-7xl px-4 sm:px-6 py-8">
+    <p>
+      Engine: <a href="https://stockfishchess.org/" target="_blank" rel="noopener">Stockfish 10</a> (GPLv3) via
+      <a href="https://github.com/lichess-org/stockfish.js" target="_blank" rel="noopener">stockfish.js</a>.
+      Rules: <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener">chess.js</a>.
+      Pieces: Cburnett, <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>, via
+      <a href="https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces" target="_blank" rel="noopener">Wikimedia Commons</a>.
+      Your games and blunders stay in this browser.
+    </p>
+  </footer>
+
+  <!-- ================================================================== -->
+  <!-- Pawn promotion modal                                                -->
+  <!-- ================================================================== -->
+  <div class="modal" id="promotionModal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="promoTitle" aria-describedby="promoText">
+      <h2 class="modal-title font-display" id="promoTitle">Promote your pawn</h2>
+      <p class="modal-text" id="promoText">Pick the piece your pawn becomes. A queen is almost always best.</p>
+      <div class="promo-grid">
+        <button type="button" class="promo-btn" data-piece="q"><span class="promo-piece"></span><span>Queen</span></button>
+        <button type="button" class="promo-btn" data-piece="r"><span class="promo-piece"></span><span>Rook</span></button>
+        <button type="button" class="promo-btn" data-piece="b"><span class="promo-piece"></span><span>Bishop</span></button>
+        <button type="button" class="promo-btn" data-piece="n"><span class="promo-piece"></span><span>Knight</span></button>
+      </div>
+      <button type="button" class="btn btn-quiet mt-4" data-close>Cancel move</button>
+    </div>
+  </div>
+
+  <!-- ================================================================== -->
+  <!-- Coach Guard: blunder warning                                        -->
+  <!-- ================================================================== -->
+  <div class="guard-backdrop" id="blunderBackdrop" hidden></div>
+  <div class="guard-card" id="blunderModal" role="alertdialog" aria-modal="true" aria-labelledby="guardTitle" aria-describedby="guardText" hidden>
+    <div class="guard-head">
+      <span class="guard-flag" aria-hidden="true">!</span>
+      <h2 class="guard-title font-display" id="guardTitle">Hold on. Take a second look.</h2>
+    </div>
+    <p class="guard-eval">
+      <span class="guard-eval-label">Your position</span>
+      <span class="guard-eval-before" id="guardEvalBefore">+0.0</span>
+      <span class="guard-eval-arrow" aria-label="would become">→</span>
+      <span class="guard-eval-after" id="guardEvalAfter">−0.0</span>
+    </p>
+    <p class="guard-text" id="guardText"></p>
+    <p class="guard-note">The red square on the board shows the danger. This position is saved to My Blunder Bank so you can practice it later.</p>
+    <div class="guard-actions">
+      <button type="button" class="btn btn-primary" id="guardUndo">Undo &amp; Rethink</button>
+      <button type="button" class="btn btn-ghost" id="guardPlay">Play Anyway</button>
+    </div>
+  </div>
+
+  <noscript>
+    <div class="noscript">Second Look needs JavaScript to run the board and the Stockfish engine.</div>
+  </noscript>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+  <script>
+    window.Chess || document.write('<script src="https://cdn.jsdelivr.net/npm/chess.js@0.10.3/chess.js"><\/script>');
+  </script>
+  <script src="./coach.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
