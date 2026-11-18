@@ -561,7 +561,7 @@
     this.pieceCodes = new Array(64).fill('');
     this.selected = null;
     this.targets = [];
-    this.marks = { lastMove: null, check: null, danger: [], hint: [] };
+    this.marks = { lastMove: null, check: null, danger: [], hint: [], stars: [] };
     this.arrows = [];
     this.drag = null;
     this.hoverSq = null;
@@ -737,6 +737,7 @@
     for (var k in patch) if (Object.prototype.hasOwnProperty.call(patch, k)) this.marks[k] = patch[k];
     if (!this.marks.danger) this.marks.danger = [];
     if (!this.marks.hint) this.marks.hint = [];
+    if (!this.marks.stars) this.marks.stars = [];
     this._paint();
   };
 
@@ -778,6 +779,7 @@
       cl.toggle('is-check', m.check === sq);
       cl.toggle('is-danger', m.danger.indexOf(sq) !== -1);
       cl.toggle('is-hint', m.hint.indexOf(sq) !== -1);
+      cl.toggle('is-star', m.stars.indexOf(sq) !== -1);
       cl.toggle('is-hover', this.hoverSq === sq);
       cl.toggle('is-drag-origin', !!(this.drag && this.drag.active && this.drag.from === sq));
     }
@@ -2863,6 +2865,584 @@
   };
 
   /* ======================================================================== */
+  /* Learn: lessons for complete beginners (content in lessons.js)            */
+  /* ======================================================================== */
+
+  var LEARN_KEY = 'chessTrainer.learn.v1';
+
+  function allLessons() {
+    var out = [];
+    (window.LESSONS || []).forEach(function (unit) {
+      unit.lessons.forEach(function (l) {
+        l.unitId = unit.id;
+        out.push(l);
+      });
+    });
+    return out;
+  }
+
+  /** FEN for a lesson board given as { square: letter }. */
+  function fenFromPieces(map) {
+    var rows = [];
+    for (var r = 7; r >= 0; r--) {
+      var row = '';
+      var empty = 0;
+      for (var f = 0; f < 8; f++) {
+        var p = map[FILES.charAt(f) + (r + 1)];
+        if (p) {
+          if (empty) row += empty;
+          empty = 0;
+          row += p;
+        } else {
+          empty++;
+        }
+      }
+      if (empty) row += empty;
+      rows.push(row);
+    }
+    return rows.join('/') + ' w - - 0 1';
+  }
+
+  /** Where a lone lesson piece can go: normal piece moves, no turns and no checks. */
+  function lessonTargets(map, from) {
+    var p = map[from];
+    if (!p) return [];
+    var white = p === p.toUpperCase();
+    var t = p.toLowerCase();
+    var idx = C.sqToIdx(from);
+    var f = idx % 8;
+    var r = Math.floor(idx / 8);
+    if (t === 'p') {
+      var out = [];
+      var dir = white ? 1 : -1;
+      var one = r + dir;
+      if (one < 0 || one > 7) return out;
+      var s1 = FILES.charAt(f) + (one + 1);
+      if (!map[s1]) {
+        out.push(s1);
+        var s2 = FILES.charAt(f) + (one + dir + 1);
+        if (r === (white ? 1 : 6) && !map[s2]) out.push(s2);
+      }
+      [-1, 1].forEach(function (df) {
+        var nf = f + df;
+        if (nf < 0 || nf > 7) return;
+        var sq = FILES.charAt(nf) + (one + 1);
+        var q = map[sq];
+        if (q && (q === q.toUpperCase()) !== white) out.push(sq);
+      });
+      return out;
+    }
+    var board = C.parseFen(fenFromPieces(map)).board;
+    return C.attacksFrom(board, idx).map(C.idxToSq).filter(function (sq) {
+      var q = map[sq];
+      return !q || (q === q.toUpperCase()) !== white;
+    });
+  }
+
+  var GOAL_HELP = {
+    mate: "That's not checkmate: the king can still get out of check. Try again.",
+    check: "That move doesn't attack the king. Try again.",
+    'king-move': 'This time, move your king to a square where nothing attacks it.',
+    block: 'This time, block the check: put a piece between the attacker and your king.',
+    capture: 'This time, take the piece that is giving check.',
+    castle: 'To castle, drag your king two squares toward one of your rooks.',
+    promote: 'Push the pawn to the last row and choose a queen.'
+  };
+
+  var Learn = {
+    board: null,
+    lesson: null,
+    stepIndex: 0,
+    step: null,
+    map: null,
+    hero: null,
+    stars: [],
+    moves: 0,
+    game: null,
+    color: 'w',
+    phase: 'list', // list | doing | thinking | wrong | step-done | lesson-done
+    epoch: 0,
+    timer: null,
+    progress: null,
+
+    loadProgress: function () {
+      var p = readJSON(LEARN_KEY, {}) || {};
+      this.progress = {
+        done: p.done && typeof p.done === 'object' ? p.done : {},
+        step: p.step && typeof p.step === 'object' ? p.step : {}
+      };
+    },
+
+    saveProgress: function () {
+      store.set(LEARN_KEY, JSON.stringify(this.progress));
+    },
+
+    doneCount: function () {
+      var done = this.progress.done;
+      return allLessons().filter(function (l) { return done[l.id]; }).length;
+    },
+
+    nextLesson: function () {
+      var done = this.progress.done;
+      var list = allLessons();
+      for (var i = 0; i < list.length; i++) if (!done[list[i].id]) return list[i];
+      return null;
+    },
+
+    init: function () {
+      var self = this;
+      this.loadProgress();
+      this.board = new BoardView($('lnBoard'), {
+        interactive: function () { return self.phase === 'doing'; },
+        canMoveFrom: function (sq) {
+          if (self.phase !== 'doing') return false;
+          if (self.map) return sq === self.hero;
+          if (!self.game || self.game.turn() !== self.color) return false;
+          var p = self.game.get(sq);
+          return !!p && p.color === self.color;
+        },
+        legalTargets: function (sq) {
+          if (self.map) return lessonTargets(self.map, sq);
+          return self.game ? legalTargets(self.game, sq) : [];
+        },
+        onMove: function (from, to) { self.onMove(from, to); }
+      });
+      $('lnUnits').addEventListener('click', function (e) {
+        var card = e.target.closest('[data-lesson]');
+        if (card) self.openLesson(card.dataset.lesson);
+      });
+      $('btnLnBack').addEventListener('click', function () { self.showList(); });
+      $('btnLnRestart').addEventListener('click', function () { if (self.lesson) self.startStep(self.stepIndex); });
+      $('btnLnHint').addEventListener('click', function () { self.hint(); });
+      $('btnLnNext').addEventListener('click', function () { self.advance(); });
+      this.renderList();
+      this.idleBoard();
+    },
+
+    onShow: function () {
+      this.renderCount();
+      if (!this.lesson) this.renderList();
+    },
+
+    renderCount: function () {
+      $('lnDoneCount').textContent = this.doneCount() + '/' + allLessons().length;
+    },
+
+    idleBoard: function () {
+      this.board.setOrientation('w');
+      this.board.setFen(START_FEN);
+      this.board.setMarks({ lastMove: null, check: null, danger: [], hint: [], stars: [] });
+      this.board.setArrows([]);
+    },
+
+    renderList: function () {
+      var self = this;
+      var wrap = $('lnUnits');
+      var next = this.nextLesson();
+      wrap.innerHTML = '';
+      (window.LESSONS || []).forEach(function (unit) {
+        var sec = document.createElement('section');
+        sec.className = 'ln-unit';
+        var h = document.createElement('h2');
+        h.className = 'ln-unit-title';
+        var title = document.createElement('span');
+        title.textContent = unit.title;
+        var count = document.createElement('span');
+        count.className = 'ln-unit-count';
+        var doneHere = unit.lessons.filter(function (l) { return self.progress.done[l.id]; }).length;
+        count.textContent = doneHere + ' of ' + unit.lessons.length;
+        h.appendChild(title);
+        h.appendChild(count);
+        sec.appendChild(h);
+        var ul = document.createElement('ul');
+        ul.className = 'ln-cards';
+        unit.lessons.forEach(function (l) {
+          var li = document.createElement('li');
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'ln-card';
+          btn.dataset.lesson = l.id;
+          var done = !!self.progress.done[l.id];
+          if (done) btn.classList.add('is-done');
+          if (next && next.id === l.id) btn.classList.add('is-next');
+          var icon = document.createElement('span');
+          icon.className = 'ln-card-icon';
+          icon.setAttribute('aria-hidden', 'true');
+          icon.textContent = l.icon;
+          var text = document.createElement('span');
+          text.className = 'ln-card-text';
+          var t = document.createElement('span');
+          t.className = 'ln-card-title';
+          t.textContent = l.title;
+          var sub = document.createElement('span');
+          sub.className = 'ln-card-sub';
+          sub.textContent = l.steps.length + (l.steps.length === 1 ? ' step' : ' steps');
+          text.appendChild(t);
+          text.appendChild(sub);
+          var state = document.createElement('span');
+          state.className = 'ln-card-state';
+          var partial = self.progress.step[l.id] || 0;
+          state.textContent = done ? 'Done ✓' : next && next.id === l.id ? (partial ? 'Continue' : 'Start') : partial ? partial + '/' + l.steps.length : '';
+          btn.setAttribute('aria-label', l.title + '. ' + (done ? 'Done.' : partial ? partial + ' of ' + l.steps.length + ' steps done.' : 'Not started.'));
+          btn.appendChild(icon);
+          btn.appendChild(text);
+          btn.appendChild(state);
+          li.appendChild(btn);
+          ul.appendChild(li);
+        });
+        sec.appendChild(ul);
+        wrap.appendChild(sec);
+      });
+      this.renderCount();
+    },
+
+    showList: function () {
+      clearTimeout(this.timer);
+      this.epoch++;
+      this.lesson = null;
+      this.phase = 'list';
+      this.map = null;
+      this.game = null;
+      $('lnLesson').hidden = true;
+      $('lnList').hidden = false;
+      $('lnTitle').textContent = 'Learn chess';
+      $('lnStepLabel').textContent = 'Pick a lesson to start';
+      $('lnIcon').textContent = '♞';
+      this.renderList();
+      this.idleBoard();
+      if (isMobile()) $('lnList').scrollIntoView({ block: 'start' });
+    },
+
+    openLesson: function (id) {
+      var lesson = allLessons().filter(function (l) { return l.id === id; })[0];
+      if (!lesson) return;
+      this.lesson = lesson;
+      $('lnList').hidden = true;
+      $('lnLesson').hidden = false;
+      $('lnLessonTitle').textContent = lesson.title;
+      $('lnIntro').textContent = lesson.intro;
+      $('lnTitle').textContent = lesson.title;
+      $('lnIcon').textContent = lesson.icon;
+      var resume = this.progress.done[id] ? 0 : Math.min(this.progress.step[id] || 0, lesson.steps.length - 1);
+      this.startStep(resume);
+      if (isMobile()) window.scrollTo(0, 0);
+    },
+
+    status: function (task, feedback, tone, kind) {
+      $('lnTask').textContent = task;
+      $('lnFeedback').textContent = feedback || '';
+      $('lnDot').dataset.kind = kind || 'you';
+      $('lnTask').closest('.status-card').dataset.tone = tone || '';
+    },
+
+    renderDots: function () {
+      var ol = $('lnDots');
+      ol.innerHTML = '';
+      for (var i = 0; i < this.lesson.steps.length; i++) {
+        var li = document.createElement('li');
+        if (i < this.stepIndex || (i === this.stepIndex && (this.phase === 'step-done' || this.phase === 'lesson-done'))) li.className = 'is-done';
+        else if (i === this.stepIndex) li.className = 'is-current';
+        ol.appendChild(li);
+      }
+      $('lnStepLabel').textContent = 'Step ' + (this.stepIndex + 1) + ' of ' + this.lesson.steps.length;
+    },
+
+    setButtons: function () {
+      var done = this.phase === 'step-done' || this.phase === 'lesson-done';
+      var lastStep = this.stepIndex >= this.lesson.steps.length - 1;
+      $('btnLnNext').disabled = !done;
+      $('btnLnNext').textContent = this.phase === 'lesson-done' ? (this.nextLesson() ? 'Next lesson' : 'All lessons') : lastStep ? 'Finish' : 'Next';
+      $('btnLnHint').disabled = this.phase !== 'doing';
+      this.board.refresh();
+    },
+
+    startStep: function (i) {
+      clearTimeout(this.timer);
+      this.epoch++;
+      this.stepIndex = i;
+      this.step = this.lesson.steps[i];
+      this.moves = 0;
+      var st = this.step;
+      this.board.clearSelection();
+      this.board.setArrows([]);
+      if (st.type === 'stars' || st.type === 'capture') {
+        this.game = null;
+        this.map = {};
+        for (var k in st.pieces) if (Object.prototype.hasOwnProperty.call(st.pieces, k)) this.map[k] = st.pieces[k];
+        this.hero = st.hero;
+        this.stars = (st.stars || []).slice();
+        this.color = 'w';
+        this.board.setOrientation('w');
+        this.board.setFen(fenFromPieces(this.map));
+        this.board.setMarks({ lastMove: null, check: null, danger: [], hint: [], stars: this.stars });
+      } else {
+        this.map = null;
+        this.game = new window.Chess(st.fen);
+        this.color = this.game.turn();
+        this.board.setOrientation(this.color);
+        this.board.setFen(st.fen);
+        this.board.setMarks({ lastMove: null, check: checkSquare(this.game), danger: [], hint: [], stars: [] });
+      }
+      this.phase = 'doing';
+      this.status(st.text, st.type === 'play' && st.tip ? 'Tip: ' + st.tip : '', '', 'you');
+      this.renderDots();
+      this.setButtons();
+    },
+
+    onMove: async function (from, to) {
+      if (this.phase !== 'doing') return;
+      if (this.map) this.miniMove(from, to);
+      else await this.realMove(from, to);
+    },
+
+    miniMove: function (from, to) {
+      if (lessonTargets(this.map, from).indexOf(to) === -1) {
+        this.board.refresh();
+        return;
+      }
+      var piece = this.map[from];
+      var took = !!this.map[to];
+      delete this.map[from];
+      var promoted = piece === 'P' && to.charAt(1) === '8';
+      this.map[to] = promoted ? 'Q' : piece;
+      this.hero = to;
+      this.moves++;
+      var hadStar = this.stars.indexOf(to) !== -1;
+      this.stars = this.stars.filter(function (s) { return s !== to; });
+      this.board.setFen(fenFromPieces(this.map), { animate: true });
+      this.board.setMarks({ lastMove: { from: from, to: to }, stars: this.stars });
+      Sound.play(promoted ? 'promote' : took ? 'capture' : 'move', true);
+      var st = this.step;
+      var left = st.type === 'stars'
+        ? this.stars.length
+        : Object.keys(this.map).filter(function (k) { return this.map[k] === this.map[k].toLowerCase(); }, this).length;
+      if (left === 0) {
+        var best = st.par ? (this.moves <= st.par ? ' That is the fewest moves possible!' : ' It can be done in ' + st.par + (st.par === 1 ? ' move.' : ' moves.')) : '';
+        this.stepDone((st.type === 'stars' ? 'All stars collected' : 'All pieces taken') + ' in ' + this.moves + (this.moves === 1 ? ' move.' : ' moves.') + best +
+          (promoted ? ' Your pawn became a queen on the last row.' : ''));
+        return;
+      }
+      if (promoted) this.status(st.text, 'Your pawn reached the last row and became a queen!', '', 'you');
+      else if (hadStar || took) this.status(st.text, left + (st.type === 'stars' ? (left === 1 ? ' star' : ' stars') : (left === 1 ? ' piece' : ' pieces')) + ' to go.', '', 'you');
+    },
+
+    goalMet: function (mv) {
+      var st = this.step;
+      var g = this.game;
+      switch (st.goal) {
+        case 'mate': return ChessAPI.isCheckmate(g);
+        case 'check': return ChessAPI.inCheck(g);
+        case 'king-move': return mv.piece === 'k';
+        case 'block': return mv.piece !== 'k' && !mv.captured;
+        case 'capture': return !!mv.captured && (!st.target || mv.to === st.target);
+        case 'castle': return /[kq]/.test(mv.flags || '');
+        case 'promote': return mv.promotion === 'q';
+        case 'moves': return (st.moves || []).indexOf(moveToUci(mv)) !== -1;
+        default: return false;
+      }
+    },
+
+    realMove: async function (from, to) {
+      var self = this;
+      var epoch = this.epoch;
+      var st = this.step;
+      var promotion = null;
+      if (needsPromotion(this.game, from, to)) {
+        this.phase = 'promoting';
+        promotion = await askPromotion(this.color);
+        if (epoch !== this.epoch) return;
+        this.phase = 'doing';
+        if (!promotion) {
+          this.board.refresh();
+          return;
+        }
+      }
+      var mv = safeMove(this.game, promotion ? { from: from, to: to, promotion: promotion } : { from: from, to: to });
+      if (!mv) {
+        this.board.refresh();
+        return;
+      }
+      this.moves++;
+      this.board.setFen(this.game.fen(), { animate: true });
+      this.board.setMarks({ lastMove: { from: mv.from, to: mv.to }, check: checkSquare(this.game), hint: [] });
+      this.board.setArrows([]);
+      playMoveSound(mv, this.game, false);
+
+      if (st.type === 'play') {
+        this.playReply(mv);
+        return;
+      }
+      if (this.goalMet(mv)) {
+        this.stepDone(st.done || 'Well done!');
+        return;
+      }
+      var msg;
+      if (st.goal === 'mate' && ChessAPI.isStalemate(this.game)) {
+        msg = "Stalemate! The bot's king is not in check, but it has no legal move, so the game would be a draw. Try a different move.";
+      } else if (st.goal === 'promote' && mv.promotion) {
+        msg = 'That works, but a queen is the strongest piece. Try again and choose the queen.';
+      } else {
+        msg = st.wrong || GOAL_HELP[st.goal] || 'Not quite. Try again.';
+      }
+      this.phase = 'wrong';
+      Sound.play('wrong');
+      this.status(st.text, msg, 'bad', 'warn');
+      this.setButtons();
+      this.timer = setTimeout(function () {
+        if (epoch !== self.epoch) return;
+        self.game.undo();
+        self.board.setFen(self.game.fen(), { animate: true });
+        self.board.setMarks({ lastMove: null, check: checkSquare(self.game), hint: [] });
+        self.phase = 'doing';
+        self.setButtons();
+      }, 1400);
+    },
+
+    /** Play-out steps: the bot defends with the engine until the game ends. */
+    playReply: async function () {
+      var self = this;
+      var epoch = this.epoch;
+      var st = this.step;
+      var g = this.game;
+      if (ChessAPI.isCheckmate(g)) {
+        this.stepDone(st.done || 'Checkmate!');
+        return;
+      }
+      if (this.playFailed()) return;
+      this.phase = 'thinking';
+      this.setButtons();
+      this.status(st.text, 'The bot is thinking…', '', 'bot');
+      var fen = g.fen();
+      var t0 = Date.now();
+      var uci = null;
+      if (!engine.failed) {
+        var r = await engine.search({ fen: fen, skill: 20, depth: 10, movetime: 350 });
+        if (epoch !== this.epoch) return;
+        uci = r && r.bestMove;
+      }
+      if (!uci) uci = randomMoveUci(g);
+      var wait = 400 - (Date.now() - t0);
+      if (wait > 0) await sleep(wait);
+      if (epoch !== this.epoch) return;
+      var mv = uci ? safeMove(g, uciToMove(uci)) : null;
+      if (!mv) {
+        var alt = randomMoveUci(g);
+        mv = alt ? safeMove(g, uciToMove(alt)) : null;
+      }
+      if (!mv) {
+        if (!this.playFailed()) {
+          this.phase = 'doing';
+          this.setButtons();
+        }
+        return;
+      }
+      this.board.setFen(g.fen(), { animate: true });
+      this.board.setMarks({ lastMove: { from: mv.from, to: mv.to }, check: checkSquare(g), hint: [] });
+      playMoveSound(mv, g, true);
+      if (this.playFailed()) return;
+      this.phase = 'doing';
+      this.status(st.text, mv.captured ? 'The bot took your ' + C.pieceName(mv.captured) + '.' : (st.tip ? 'Tip: ' + st.tip : ''), '', 'you');
+      this.setButtons();
+    },
+
+    playFailed: function () {
+      var g = this.game;
+      var reason = null;
+      if (ChessAPI.isStalemate(g)) reason = "Stalemate! The bot's king had no legal move but was not in check, so it's a draw. Keep your queen or rook a little further away and try again.";
+      else if (ChessAPI.isInsufficient && ChessAPI.isInsufficient(g)) reason = 'The bot took your piece, so nobody can checkmate any more. Try again, and keep your piece away from the king.';
+      else if (this.moves >= 50) reason = 'That took 50 moves, so the game would be a draw. Try again: shrink the box faster.';
+      if (!reason) return false;
+      this.phase = 'wrong';
+      Sound.play('wrong');
+      this.status(this.step.text, reason + ' Press Start over.', 'bad', 'warn');
+      this.setButtons();
+      return true;
+    },
+
+    stepDone: function (text) {
+      this.phase = this.stepIndex >= this.lesson.steps.length - 1 ? 'lesson-done' : 'step-done';
+      Sound.play('correct');
+      var id = this.lesson.id;
+      this.progress.step[id] = Math.max(this.progress.step[id] || 0, this.stepIndex + 1);
+      if (this.phase === 'lesson-done') {
+        var first = !this.progress.done[id];
+        this.progress.done[id] = Date.now();
+        this.saveProgress();
+        this.status('Lesson complete!', text, 'good', 'over');
+        if (typeof onProgress === 'function') onProgress('lesson', { id: id, first: first });
+      } else {
+        this.saveProgress();
+        this.status('Well done!', text, 'good', 'over');
+        if (typeof onProgress === 'function') onProgress('lesson-step', { id: id });
+      }
+      this.renderDots();
+      this.renderCount();
+      this.setButtons();
+    },
+
+    advance: function () {
+      if (this.phase === 'step-done') {
+        this.startStep(this.stepIndex + 1);
+      } else if (this.phase === 'lesson-done') {
+        var next = this.nextLesson();
+        if (next) this.openLesson(next.id);
+        else this.showList();
+      }
+    },
+
+    hint: function () {
+      if (this.phase !== 'doing') return;
+      var self = this;
+      var st = this.step;
+      Sound.play('hint');
+      if (this.map) {
+        var reach = lessonTargets(this.map, this.hero);
+        var goals = st.type === 'stars'
+          ? this.stars
+          : Object.keys(this.map).filter(function (k) { return self.map[k] === self.map[k].toLowerCase(); });
+        var direct = reach.filter(function (sq) { return goals.indexOf(sq) !== -1; })[0];
+        if (direct) {
+          this.board.setArrows([{ from: this.hero, to: direct, color: 'green' }]);
+          this.status(st.text, 'Follow the green arrow.', '', 'you');
+        } else {
+          this.board.setMarks({ hint: [this.hero] });
+          this.status(st.text, 'No target can be reached in one move from here. Move somewhere that lines up with one first.', '', 'you');
+        }
+        return;
+      }
+      if (st.type === 'play') {
+        analyze(this.game.fen()).then(function (a) {
+          if (!a || !a.bestMove || self.phase !== 'doing') return;
+          var m = uciToMove(a.bestMove);
+          self.board.setArrows([{ from: m.from, to: m.to, color: 'green' }]);
+          self.status(st.text, 'A good move: follow the green arrow.', '', 'you');
+        });
+        return;
+      }
+      var sol = null;
+      if (st.goal === 'moves') {
+        sol = uciToMove(st.moves[0]);
+      } else {
+        var legal = this.game.moves({ verbose: true });
+        for (var i = 0; i < legal.length && !sol; i++) {
+          var m = legal[i];
+          if (st.goal === 'promote' && m.promotion && m.promotion !== 'q') continue;
+          var tryGame = new window.Chess(this.game.fen());
+          var tmv = safeMove(tryGame, { from: m.from, to: m.to, promotion: m.promotion });
+          var saved = this.game;
+          this.game = tryGame;
+          if (tmv && this.goalMet(tmv)) sol = m;
+          this.game = saved;
+        }
+      }
+      if (sol) {
+        this.board.setArrows([{ from: sol.from, to: sol.to, color: 'green' }]);
+        this.status(st.text, 'Follow the green arrow.', '', 'you');
+      }
+    }
+  };
+
+  /* ======================================================================== */
   /* Puzzles: beginner puzzles from the Lichess puzzle database (CC0)         */
   /* ======================================================================== */
 
@@ -3331,7 +3911,7 @@
     return window.matchMedia && window.matchMedia('(max-width: 1023px)').matches;
   }
 
-  var VIEW_NAMES = ['home', 'play', 'puzzles', 'bank'];
+  var VIEW_NAMES = ['home', 'learn', 'play', 'puzzles', 'bank'];
 
   function showTab(name) {
     if (S.phase === 'warning' || S.phase === 'promoting') return;
@@ -3355,6 +3935,7 @@
     }
     if (name === 'bank') Bank.onShow();
     if (name === 'puzzles') Puzzles.onShow();
+    if (name === 'learn') Learn.onShow();
     if (name === 'home') renderHome();
     if (wasHidden && isMobile()) window.scrollTo(0, 0);
   }
@@ -3817,6 +4398,7 @@
     ui.tabPlay.addEventListener('click', function () { showTab('play'); });
     ui.tabBank.addEventListener('click', function () { showTab('bank'); });
     $('tab-puzzles').addEventListener('click', function () { showTab('puzzles'); });
+    $('tab-learn').addEventListener('click', function () { showTab('learn'); });
     $('navSettings').addEventListener('click', function () { goToPlay('settings'); });
 
     ui.btnMenu.addEventListener('click', function () {
@@ -3850,7 +4432,7 @@
     Array.prototype.forEach.call(ui.viewHome.querySelectorAll('[data-go]'), function (btn) {
       btn.addEventListener('click', function () {
         var go = btn.dataset.go;
-        if (go === 'bank' || go === 'puzzles') showTab(go);
+        if (go === 'bank' || go === 'puzzles' || go === 'learn') showTab(go);
         else if (go === 'settings') goToPlay('settings');
         else goToPlay('new');
       });
@@ -3879,13 +4461,14 @@
     bindUI();
     Bank.init();
     Puzzles.init();
+    Learn.init();
     setupInstall();
     updateBankBadge();
     engine.start();
     S.homeLevel = S.levelIndex;
     if (!restoreGame()) showHome();
     var hash = location.hash;
-    if (hash === '#bank' || hash === '#puzzles') showTab(hash.slice(1));
+    if (hash === '#bank' || hash === '#puzzles' || hash === '#learn') showTab(hash.slice(1));
     else if (hash === '#home' || (hash !== '#play' && isMobile())) showTab('home');
     else showTab('play');
   }

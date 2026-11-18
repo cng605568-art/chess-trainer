@@ -19,6 +19,7 @@ var SHELL = [
   './coach.js',
   './stockfish-worker.js',
   './puzzles.json',
+  './lessons.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png'

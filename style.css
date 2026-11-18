@@ -2804,6 +2804,7 @@ button.move-san:hover {
 
   /* Game panel as a phone app screen: icon tab bar, step buttons pinned at the bottom. */
   #view-play .side-head,
+  #view-learn .side-head,
   #view-puzzles .side-head {
     display: none;
   }
@@ -2870,6 +2871,7 @@ button.move-san:hover {
 @media (max-width: 640px) {
   /* Edge-to-edge board, the way chess apps lay out a game on a phone. */
   #view-play,
+  #view-learn,
   #view-puzzles,
   #view-bank {
     gap: 0;
@@ -2877,12 +2879,14 @@ button.move-san:hover {
   }
 
   #view-play .play-col,
+  #view-learn .play-col,
   #view-puzzles .play-col,
   #view-bank .play-col {
     max-width: none;
   }
 
   #view-play .side-panel,
+  #view-learn .side-panel,
   #view-puzzles .side-panel,
   #view-bank .side-panel {
     margin-top: 6px;
@@ -3099,5 +3103,206 @@ button.move-san:hover {
 }
 
 #view-puzzles .status-card[data-tone="bad"] {
+  box-shadow: inset 0 0 0 2px rgba(229, 83, 75, 0.5);
+}
+
+/* Lesson targets: a star on the square to reach */
+.sq.is-star .piece-slot::before {
+  content: "";
+  width: 62%;
+  height: 62%;
+  background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2.2l2.9 6.2 6.8.8-5 4.6 1.4 6.7L12 17.1l-6.1 3.4 1.4-6.7-5-4.6 6.8-.8z' fill='%23ffd23f' stroke='%238a6a00' stroke-width='1.1' stroke-linejoin='round'/%3E%3C/svg%3E");
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.25));
+  animation: star-bob 1.6s ease-in-out infinite;
+}
+
+@keyframes star-bob {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-4%) scale(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sq.is-star .piece-slot::before {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------------------ */
+/* Learn                                                                    */
+/* ------------------------------------------------------------------------ */
+
+.avatar-glyph {
+  font: 400 30px/1 "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", serif;
+}
+
+.ln-welcome {
+  margin: 0;
+  color: var(--muted);
+}
+
+.ln-unit {
+  margin: 0 0 18px;
+}
+
+.ln-unit:last-child {
+  margin-bottom: 0;
+}
+
+.ln-unit-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 10px;
+  font: 800 1.05rem/1.2 var(--font-display);
+}
+
+.ln-unit-count {
+  color: var(--faint);
+  font: 700 0.82rem var(--font-sans);
+}
+
+.ln-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ln-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
+}
+
+.ln-card:hover {
+  background: var(--card-hover);
+}
+
+.ln-card.is-next {
+  box-shadow: inset 0 0 0 2px var(--silver), 0 3px 0 rgba(0, 0, 0, 0.3);
+}
+
+.ln-card-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #474747;
+  font: 400 26px/1 "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", serif;
+}
+
+.ln-card.is-done .ln-card-icon {
+  background: var(--silver);
+  color: var(--silver-ink);
+}
+
+.ln-card-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ln-card-title {
+  font: 700 0.98rem/1.25 var(--font-display);
+}
+
+.ln-card-sub {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.ln-card-state {
+  flex: none;
+  color: var(--faint);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.ln-card.is-done .ln-card-state {
+  color: var(--good);
+}
+
+.ln-card.is-next .ln-card-state {
+  color: var(--ink);
+}
+
+.ln-back {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 4px;
+  padding: 4px 8px 4px 2px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: 700 0.92rem var(--font-display);
+  cursor: pointer;
+}
+
+.ln-back:hover {
+  color: var(--ink);
+}
+
+.ln-back svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ln-lesson-title {
+  margin: -6px 0 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.ln-intro {
+  margin: -8px 0 0;
+  color: #d6d6d6;
+  line-height: 1.5;
+}
+
+.ln-dots {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ln-dots li {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: #3e3e3e;
+}
+
+.ln-dots li.is-done {
+  background: var(--good);
+}
+
+.ln-dots li.is-current {
+  background: var(--silver);
+}
+
+#view-learn .status-card[data-tone="good"] {
+  box-shadow: inset 0 0 0 2px rgba(127, 182, 90, 0.55);
+}
+
+#view-learn .status-card[data-tone="bad"] {
   box-shadow: inset 0 0 0 2px rgba(229, 83, 75, 0.5);
 }
