@@ -3795,3 +3795,459 @@ button.move-san:hover {
 html[lang^="zh"] body {
   letter-spacing: 0;
 }
+
+/* ------------------------------------------------------------------------ */
+/* Ways to play: game modes, time controls, premoves, puzzle runs          */
+/* ------------------------------------------------------------------------ */
+
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mode-card {
+  position: relative;
+  display: block;
+}
+
+.mode-card-wide {
+  grid-column: 1 / -1;
+}
+
+.mode-card input,
+.tc input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.mode-face {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 100%;
+  padding: 10px;
+  border-radius: var(--radius-control);
+  background: var(--card);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
+  transition: background-color 0.12s ease;
+}
+
+.mode-card:hover .mode-face {
+  background: var(--card-hover);
+}
+
+.mode-card input:checked + .mode-face {
+  background: #474747;
+  box-shadow: inset 0 0 0 2px var(--silver), 0 3px 0 rgba(0, 0, 0, 0.3);
+}
+
+.mode-card input:focus-visible + .mode-face,
+.tc input:focus-visible + span {
+  outline: 3px solid #f5f5f5;
+  outline-offset: 2px;
+}
+
+.mode-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: #222;
+  color: var(--silver);
+}
+
+.mode-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.mode-glyph {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.mode-word,
+.way-word {
+  font: 800 1rem var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+/* Head start: the bot's missing piece */
+.mode-odds {
+  position: relative;
+}
+
+.mode-odds::after {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  top: 50%;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--flag);
+  transform: rotate(-35deg);
+}
+
+.mode-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mode-name {
+  font: 700 0.92rem/1.2 var(--font-display);
+  color: var(--ink);
+}
+
+.mode-sub {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+.mode-help {
+  margin: 10px 2px 0;
+}
+
+.odds-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.odds-label {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+/* Time controls */
+.tc-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tc-group {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.tc-kind {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font: 700 0.84rem var(--font-display);
+}
+
+.tc-kind svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.tc-bullet svg, .way-bullet svg { color: #e9a24a; }
+.tc-blitz svg, .way-blitz svg { color: #f2cf4a; }
+.tc-rapid svg, .way-rapid svg { color: #8bc05e; }
+
+.tc-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-control);
+  background: #1c1c1c;
+}
+
+.tc-row-wide {
+  grid-template-columns: 1fr;
+}
+
+.tc {
+  position: relative;
+  display: block;
+}
+
+.tc span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  border-radius: 6px;
+  color: var(--muted);
+  font: 700 0.88rem var(--font-display);
+  white-space: nowrap;
+}
+
+.tc input:checked + span {
+  background: var(--silver);
+  color: var(--silver-ink);
+}
+
+.friend-block {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.friend-block .setting {
+  padding: 12px 14px;
+  border-radius: var(--radius-card);
+  background: var(--card);
+}
+
+/* Two-player games: no evaluation; a white and a black pawn avatar */
+#view-play[data-mode="friend"] .evalbar,
+#view-play[data-mode="friend"] #evalChip {
+  display: none;
+}
+
+.avatar.avatar-pawn[data-color="w"] {
+  background: #e9e9e9;
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px #bdbdbd;
+}
+
+.avatar.avatar-pawn[data-color="w"] svg {
+  color: #f7f7f7;
+  filter: drop-shadow(0 0 1px #6c6c6c);
+}
+
+.avatar.avatar-pawn[data-color="b"] {
+  background: #3a3a3a;
+  color: #111;
+}
+
+.result-friend {
+  background: #4a4a4a;
+  color: var(--ink);
+  font-size: 0.72rem;
+}
+
+.summary-card.is-friend .evalgraph,
+.summary-card.is-friend .quality-grid {
+  display: none;
+}
+
+/* Three-check counters next to each player's name */
+.check-pips {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.check-pips i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px #8a8a8a;
+}
+
+.check-pips i.is-given {
+  background: var(--flag);
+  box-shadow: none;
+}
+
+/* King of the Hill: the four centre squares */
+.sq.is-hill {
+  box-shadow: inset 0 0 0 3px rgba(232, 176, 78, 0.9);
+}
+
+.sq.is-hill:not(.is-check) {
+  background-image: linear-gradient(rgba(232, 176, 78, 0.2), rgba(232, 176, 78, 0.2));
+}
+
+/* A move queued while the bot thinks */
+.sq.is-premove::before {
+  background: rgba(214, 79, 72, 0.55);
+}
+
+/* Home: ways to play */
+.ways-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.way {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 6px 10px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--card);
+  color: var(--ink);
+  text-align: center;
+  cursor: pointer;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
+  transition: background-color 0.12s ease;
+}
+
+.way:hover {
+  background: var(--card-hover);
+}
+
+.way:focus-visible {
+  outline: 3px solid #f5f5f5;
+  outline-offset: 2px;
+}
+
+.way-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: var(--silver);
+}
+
+.way-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.way-glyph {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.way-heart svg {
+  color: #e5655e;
+}
+
+.way-name {
+  font: 700 0.86rem/1.2 var(--font-display);
+}
+
+.way-sub {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.25;
+}
+
+/* Puzzles: Sprint and Survival */
+.pz-modes {
+  margin-bottom: 2px;
+}
+
+#view-puzzles[data-pzmode="sprint"] .pz-rated-only,
+#view-puzzles[data-pzmode="survival"] .pz-rated-only {
+  display: none;
+}
+
+.rush-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px;
+  border-radius: var(--radius-card);
+  background: var(--card);
+}
+
+.rush-title {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.rush-text,
+.rush-best {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.rush-best {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.rush-best:empty {
+  display: none;
+}
+
+.rush-card .btn-big {
+  margin-top: 6px;
+}
+
+.rush-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.rush-board[hidden] {
+  display: none;
+}
+
+.rush-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 70px;
+  padding: 8px 4px;
+  border-radius: var(--radius-control);
+  background: var(--card);
+}
+
+.rush-stat[hidden] {
+  display: none;
+}
+
+.rush-num {
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+#rushTimeWrap.is-low .rush-num {
+  color: var(--flag);
+}
+
+.rush-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.rush-lives {
+  display: flex;
+  gap: 6px;
+  height: 1.6rem;
+  align-items: center;
+}
+
+.rush-lives i {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #5a5a5a;
+}
+
+.rush-lives i.is-lost {
+  background: var(--flag);
+}
+
+@media (max-width: 380px) {
+  .ways-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tc-group {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

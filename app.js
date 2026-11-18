@@ -59,11 +59,39 @@
 
   // Clocks. A base of 0 means "no limit": the clocks count up instead of down.
   var TIME_CONTROLS = {
-    none: { base: 0, inc: 0, phrase: 'no time limit' },
-    '15+10': { base: 15 * 60000, inc: 10000, phrase: '15 minutes each plus 10 seconds a move' },
-    '10': { base: 10 * 60000, inc: 0, phrase: '10 minutes each' },
-    '5': { base: 5 * 60000, inc: 0, phrase: '5 minutes each' }
+    none: { base: 0, inc: 0, kind: 'none', phrase: 'no time limit' },
+    '1': { base: 60000, inc: 0, kind: 'bullet', phrase: '1 minute each' },
+    '1+1': { base: 60000, inc: 1000, kind: 'bullet', phrase: '1 minute each plus 1 second a move' },
+    '2+1': { base: 2 * 60000, inc: 1000, kind: 'bullet', phrase: '2 minutes each plus 1 second a move' },
+    '3': { base: 3 * 60000, inc: 0, kind: 'blitz', phrase: '3 minutes each' },
+    '3+2': { base: 3 * 60000, inc: 2000, kind: 'blitz', phrase: '3 minutes each plus 2 seconds a move' },
+    '5': { base: 5 * 60000, inc: 0, kind: 'blitz', phrase: '5 minutes each' },
+    '10': { base: 10 * 60000, inc: 0, kind: 'rapid', phrase: '10 minutes each' },
+    '15+10': { base: 15 * 60000, inc: 10000, kind: 'rapid', phrase: '15 minutes each plus 10 seconds a move' },
+    '30': { base: 30 * 60000, inc: 0, kind: 'rapid', phrase: '30 minutes each' }
   };
+  var TIME_KINDS = {
+    none: { name: 'No limit', help: 'With no limit, the clocks count how long each side thinks.' },
+    bullet: { name: 'Bullet', help: 'Bullet is the fastest chess: a minute or two for the whole game. You can make your next move while the bot is still thinking (a premove).', friendHelp: 'Bullet is the fastest chess: a minute or two for the whole game.' },
+    blitz: { name: 'Blitz', help: 'Blitz gives you a few minutes for the whole game: fast, but with time to think.' },
+    rapid: { name: 'Rapid', help: 'Rapid gives you time to think about every move. The best way to learn.' }
+  };
+
+  // Ways to play. Head start removes a bot piece; King of the Hill and
+  // Three-check add a second way to win; Play a friend is two people on one device.
+  var GAME_MODES = {
+    standard: { name: 'Standard', sub: 'Normal chess', help: 'Normal chess against a bot.' },
+    odds: { name: 'Head start', sub: 'The bot gives up a piece', help: 'The bot starts without one of its pieces, so you begin ahead. A friendly way to win your first games.' },
+    koth: { name: 'King of the Hill', sub: 'King to the centre wins', help: 'Normal chess with one extra way to win: get your king to one of the four centre squares (d4, e4, d5 or e5). Checkmate still wins too.' },
+    threecheck: { name: 'Three-check', sub: 'Give 3 checks to win', help: "Normal chess with one extra way to win: put the other king in check three times. Checkmate still wins too." },
+    friend: { name: 'Play a friend', sub: 'Two players, one device', help: 'Two people take turns on this device. Turn on Turn the board to see your own pieces at the bottom on your turn.' }
+  };
+  var ODDS = {
+    q: { name: 'Queen', squares: { w: 'd1', b: 'd8' } },
+    r: { name: 'Rook', squares: { w: 'a1', b: 'a8' } },
+    n: { name: 'Knight', squares: { w: 'b1', b: 'b8' } }
+  };
+  var HILL = ['d4', 'e4', 'd5', 'e5'];
   var LOW_TIME_MS = 20000;
   var AUTOPLAY_MS = 900;
   var PAWN_AVATAR = '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6.5a5.6 5.6 0 0 0-3.5 10c-2.2 1.2-3.6 3.1-3.6 5.4 0 .6.5 1.1 1.1 1.1h2c-.4 3.5-1.9 6.2-4.7 8.1-.7.4-1 1.1-1 1.8v1.6h19.4v-1.6c0-.7-.3-1.4-1-1.8-2.8-1.9-4.3-4.6-4.7-8.1h2c.6 0 1.1-.5 1.1-1.1 0-2.3-1.4-4.2-3.6-5.4A5.6 5.6 0 0 0 20 6.5z" fill="currentColor"/></svg>';
@@ -175,7 +203,7 @@
       fen: game.fen(),
       bestMove: null,
       pv: [],
-      whiteCp: term === 'checkmate' ? (stm === 'w' ? -C.MATE_CP : C.MATE_CP) : 0,
+      whiteCp: term === 'checkmate' || term === 'hill' || term === 'threecheck' ? (stm === 'w' ? -C.MATE_CP : C.MATE_CP) : 0,
       depth: 99,
       hasScore: true,
       terminal: term
@@ -193,6 +221,7 @@
 
   /** Feed label in words: "You: knight to f3", "Bot: bishop takes pawn on c4". */
   function moveLabel(mv) {
+    if (S.mode === 'friend') return C.moveTitle(mv, false, C.colorName(mv.color));
     return C.moveTitle(mv, mv.color === S.playerColor);
   }
 
@@ -580,14 +609,15 @@
       interactive: opts.interactive || function () { return false; },
       canMoveFrom: opts.canMoveFrom || function () { return false; },
       legalTargets: opts.legalTargets || function () { return []; },
-      onMove: opts.onMove || function () {}
+      onMove: opts.onMove || function () {},
+      onIdleClick: opts.onIdleClick || null
     };
     this.orientation = 'w';
     this.pieces = new Array(64).fill(null);
     this.pieceCodes = new Array(64).fill('');
     this.selected = null;
     this.targets = [];
-    this.marks = { lastMove: null, check: null, danger: [], hint: [], stars: [] };
+    this.marks = { lastMove: null, check: null, danger: [], hint: [], stars: [], hill: [], premove: [] };
     this.arrows = [];
     this.drag = null;
     this.hoverSq = null;
@@ -764,6 +794,8 @@
     if (!this.marks.danger) this.marks.danger = [];
     if (!this.marks.hint) this.marks.hint = [];
     if (!this.marks.stars) this.marks.stars = [];
+    if (!this.marks.hill) this.marks.hill = [];
+    if (!this.marks.premove) this.marks.premove = [];
     this._paint();
   };
 
@@ -806,6 +838,8 @@
       cl.toggle('is-danger', m.danger.indexOf(sq) !== -1);
       cl.toggle('is-hint', m.hint.indexOf(sq) !== -1);
       cl.toggle('is-star', m.stars.indexOf(sq) !== -1);
+      cl.toggle('is-hill', m.hill.indexOf(sq) !== -1);
+      cl.toggle('is-premove', m.premove.indexOf(sq) !== -1);
       cl.toggle('is-hover', this.hoverSq === sq);
       cl.toggle('is-drag-origin', !!(this.drag && this.drag.active && this.drag.from === sq));
     }
@@ -862,6 +896,7 @@
       return;
     }
     if (this.selected) this.clearSelection();
+    else if (this.opts.onIdleClick) this.opts.onIdleClick(sq);
   };
 
   BoardView.prototype._onMove = function (e) {
@@ -1219,8 +1254,11 @@
       var undoBtn = $('guardUndo');
       var playBtn = $('guardPlay');
       $('guardText').textContent = info.message;
+      $('guardNote').textContent = info.banked === false
+        ? T('The red square on the board shows the danger.')
+        : T('The red square on the board shows the danger. This position is saved to My Blunder Bank so you can practice it later.');
       $('guardEvalBefore').textContent = C.shortScore(info.evalBefore);
-      $('guardEvalAfter').textContent = C.shortScore(info.evalAfter);
+      $('guardEvalAfter').textContent = info.afterText || C.shortScore(info.evalAfter);
       var prevFocus = document.activeElement;
       if (window.matchMedia('(max-width: 1023px)').matches) {
         ui.boardWrap.scrollIntoView({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
@@ -1299,6 +1337,14 @@
     started: false,
     viewPly: null, // null = live position; a number = replaying that ply
     startFen: null, // set when a game starts from a position (try again / play from here)
+    mode: 'standard', // the running game's mode (see GAME_MODES)
+    modeChoice: 'standard', // the New game choice
+    odds: null, // Head start: the piece the bot plays without ('q', 'r' or 'n')
+    oddsChoice: 'q',
+    autoFlip: true, // Play a friend: turn the board after each move
+    checkBase: { w: 0, b: 0 }, // Three-check: checks given before the game's first move
+    premove: null, // { from, to } queued while the bot thinks
+    variantNote: '',
     liveEval: null,
     summaryStartPly: 0,
     review: { quality: {}, evals: {}, saves: 0 }
@@ -1310,6 +1356,164 @@
   var dailyBoard;
 
   function oppColor() { return C.opposite(S.playerColor); }
+  function isFriend() { return S.mode === 'friend'; }
+  function isVariant() { return S.mode === 'koth' || S.mode === 'threecheck'; }
+  function modeName(m) { return T((GAME_MODES[m] || GAME_MODES.standard).name); }
+
+  /** The usual start, without one of the bot's pieces (and its castling right, for a rook). */
+  function oddsFen(playerColor, piece) {
+    var botColor = C.opposite(playerColor);
+    var o = ODDS[piece] || ODDS.q;
+    var file = o.squares[botColor].charCodeAt(0) - 97;
+    var parts = START_FEN.split(' ');
+    var rows = parts[0].split('/');
+    var r = botColor === 'w' ? 7 : 0;
+    var row = rows[r].split('');
+    row[file] = '1';
+    // merge neighbouring empty squares: "1nbqkbnr" stays, "rn1qkbnr" stays, "r1" + "1" -> "2"
+    rows[r] = row.join('').replace(/\d+/g, function (d) { return String(d.split('').reduce(function (a, c) { return a + +c; }, 0)); });
+    parts[0] = rows.join('/');
+    if (piece === 'r') parts[2] = parts[2].replace(botColor === 'w' ? 'Q' : 'q', '') || '-';
+    return parts.join(' ');
+  }
+
+  function kingSquare(game, color) {
+    var b = C.parseFen(game.fen()).board;
+    for (var i = 0; i < 64; i++) if (b[i] && b[i].t === 'k' && b[i].c === color) return C.idxToSq(i);
+    return null;
+  }
+
+  /** Three-check: checks each side has given in this game. */
+  function checksGiven(game) {
+    var n = { w: S.checkBase.w || 0, b: S.checkBase.b || 0 };
+    game.history({ verbose: true }).forEach(function (m) { if (/[+#]$/.test(m.san)) n[m.color]++; });
+    return n;
+  }
+
+  /** 'hill' or 'threecheck' when the last move won by the mode's extra rule. */
+  function variantTerm(game) {
+    if (S.mode === 'koth') {
+      var mover = C.opposite(game.turn());
+      if (HILL.indexOf(kingSquare(game, mover)) !== -1) return 'hill';
+      if (HILL.indexOf(kingSquare(game, game.turn())) !== -1) return 'hill';
+    } else if (S.mode === 'threecheck') {
+      var n = checksGiven(game);
+      if (n.w >= 3 || n.b >= 3) return 'threecheck';
+    }
+    return null;
+  }
+
+  /** How the game ends after the last move, if it does: checkmate first, then the mode's own win, then draws. */
+  function gameTerm(game) {
+    var t = terminalInfo(game);
+    if (t === 'checkmate') return t;
+    return variantTerm(game) || t;
+  }
+
+  /** Moves for `color` (to move in `game`) that win straight away by the mode's extra rule. */
+  function variantWins(game, color, checks) {
+    if (game.turn() !== color) return [];
+    var moves = game.moves({ verbose: true });
+    if (S.mode === 'koth') return moves.filter(function (m) { return m.piece === 'k' && HILL.indexOf(m.to) !== -1; });
+    if (S.mode === 'threecheck' && checks[color] >= 2) return moves.filter(function (m) { return /[+#]$/.test(m.san); });
+    return [];
+  }
+
+  /** The same position with the other side to move (to see what they threaten), or null. */
+  function passTurn(game) {
+    if (ChessAPI.inCheck(game)) return null;
+    var parts = game.fen().split(' ');
+    parts[1] = parts[1] === 'w' ? 'b' : 'w';
+    parts[3] = '-';
+    try {
+      var g = new window.Chess(parts.join(' '));
+      return g.fen().split(' ')[0] === parts[0] ? g : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  var PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+
+  /**
+   * The bot in King of the Hill and Three-check: Stockfish plays normal chess,
+   * so take a winning move when there is one, and never allow the player one.
+   */
+  function variantBotMove(uci, lines) {
+    var botColor = oppColor();
+    var checks = checksGiven(S.game);
+    var wins = variantWins(S.game, botColor, checks);
+    if (wins.length) return moveToUci(wins[0]);
+    var fen = S.game.fen();
+    function safe(u) {
+      if (!u) return false;
+      var g = new window.Chess(fen);
+      var m = safeMove(g, uciToMove(u));
+      if (!m) return false;
+      if (ChessAPI.isCheckmate(g)) return true;
+      var c2 = { w: checks.w, b: checks.b };
+      if (/[+#]$/.test(m.san)) c2[botColor]++;
+      return variantWins(g, S.playerColor, c2).length === 0;
+    }
+    if (safe(uci)) return uci;
+    var others = (lines || []).map(function (l) { return l && l.pv && l.pv[0]; });
+    for (var i = 0; i < others.length; i++) if (safe(others[i])) return others[i];
+    var scored = [];
+    S.game.moves({ verbose: true }).forEach(function (m) {
+      var u = moveToUci(m);
+      if (!safe(u)) return;
+      var g = new window.Chess(fen);
+      safeMove(g, uciToMove(u));
+      var attacked = g.moves({ verbose: true }).some(function (r) { return r.to === m.to; });
+      scored.push({ u: u, score: (m.captured ? PIECE_VALUE[m.captured] : 0) - (attacked ? PIECE_VALUE[m.piece] : 0) + Math.random() * 0.5 });
+    });
+    if (!scored.length) return uci;
+    scored.sort(function (a, b) { return b.score - a.score; });
+    return scored[0].u;
+  }
+
+  /* ---------------------------------------------------------------- premoves */
+
+  function premoveOpen() {
+    return S.started && !isFriend() && S.phase === 'bot' && S.viewPly === null && S.game.turn() !== S.playerColor;
+  }
+
+  /** Where a piece could go if it were your turn now (checked again when the bot has moved). */
+  function premoveTargets(sq) {
+    var parts = S.game.fen().split(' ');
+    parts[1] = S.playerColor;
+    parts[3] = '-';
+    var g;
+    try { g = new window.Chess(parts.join(' ')); } catch (e) { return []; }
+    var out = [];
+    g.moves({ square: sq, verbose: true }).forEach(function (m) { if (out.indexOf(m.to) === -1) out.push(m.to); });
+    return out;
+  }
+
+  function setPremove(from, to) {
+    S.premove = { from: from, to: to };
+    board.setMarks({ premove: [from, to] });
+  }
+
+  function clearPremove() {
+    if (!S.premove) return;
+    S.premove = null;
+    if (board) board.setMarks({ premove: [] });
+  }
+
+  /** On your turn, play the queued premove if it is still legal. */
+  function runPremove() {
+    var pm = S.premove;
+    if (!pm) return false;
+    clearPremove();
+    if (legalTargets(S.game, pm.from).indexOf(pm.to) === -1) return false;
+    var epoch = S.epoch;
+    setTimeout(function () {
+      if (epoch === S.epoch && S.phase === 'player' && S.viewPly === null && S.game.turn() === S.playerColor) onPlayerMove(pm.from, pm.to, 'q');
+    }, 60);
+    return true;
+  }
+
   function oppName() { return C.colorName(oppColor()); }
 
   function loadSettings() {
@@ -1325,6 +1529,9 @@
       if (typeof s.installSnoozedUntil === 'number') S.installSnoozedUntil = s.installSnoozedUntil;
       if (window.I18N && Object.prototype.hasOwnProperty.call(window.I18N.langs, s.lang)) S.lang = s.lang;
       if (typeof s.timeChoice === 'string' && Object.prototype.hasOwnProperty.call(TIME_CONTROLS, s.timeChoice)) S.timeChoice = s.timeChoice;
+      if (typeof s.modeChoice === 'string' && Object.prototype.hasOwnProperty.call(GAME_MODES, s.modeChoice)) S.modeChoice = s.modeChoice;
+      if (typeof s.oddsChoice === 'string' && Object.prototype.hasOwnProperty.call(ODDS, s.oddsChoice)) S.oddsChoice = s.oddsChoice;
+      if (typeof s.autoFlip === 'boolean') S.autoFlip = s.autoFlip;
       if (s.boardThemeChosen === true && (s.boardTheme === 'grey' || s.boardTheme === 'green' || s.boardTheme === 'brown')) {
         S.boardTheme = s.boardTheme;
         S.boardThemeChosen = true;
@@ -1342,6 +1549,9 @@
       colorChoice: S.colorChoice,
       soundOn: S.soundOn,
       timeChoice: S.timeChoice,
+      modeChoice: S.modeChoice,
+      oddsChoice: S.oddsChoice,
+      autoFlip: S.autoFlip,
       installSnoozedUntil: S.installSnoozedUntil,
       boardTheme: S.boardTheme,
       boardThemeChosen: S.boardThemeChosen,
@@ -1364,6 +1574,9 @@
       moves: moves,
       playerColor: S.playerColor,
       startFen: S.startFen || '',
+      mode: S.mode,
+      odds: S.odds || '',
+      checkBase: S.checkBase,
       gameId: S.gameId,
       clock: { base: Clock.base, inc: Clock.inc, w: Math.round(Clock.value('w')), b: Math.round(Clock.value('b')) },
       savedAt: stamp
@@ -1556,12 +1769,19 @@
       level: S.levelIndex,
       color: S.playerColor,
       moves: Math.ceil(S.game.history().length / 2),
-      blunders: blunders,
-      saves: S.review.saves
+      blunders: isFriend() ? null : blunders,
+      saves: S.review.saves,
+      mode: S.mode,
+      odds: S.odds || undefined,
+      time: S.timeChoice
     });
     store.set(HISTORY_KEY, JSON.stringify(list.slice(0, 50)));
     var st = loadStats();
     st.games++;
+    if (isFriend()) {
+      saveStats(st);
+      return;
+    }
     if (result === 'win') st.wins++;
     else if (result === 'loss') st.losses++;
     else st.draws++;
@@ -1650,6 +1870,24 @@
     ui.evalBar.setAttribute('aria-label', T('Even'));
   }
 
+  /** The New game pane follows the chosen mode and time. */
+  function renderNewGameForm() {
+    var mode = S.modeChoice;
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="gameMode"]'), function (i) { i.checked = i.value === mode; });
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="oddsPiece"]'), function (i) { i.checked = i.value === S.oddsChoice; });
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="timeControl"]'), function (i) { i.checked = i.value === S.timeChoice; });
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="playAs"]'), function (i) { i.checked = i.value === S.colorChoice; });
+    $('modeHelp').textContent = T(GAME_MODES[mode].help);
+    $('oddsPick').hidden = mode !== 'odds';
+    $('playAsBlock').hidden = mode === 'friend';
+    $('botBlock').hidden = mode === 'friend';
+    $('friendBlock').hidden = mode !== 'friend';
+    $('flipToggle').setAttribute('aria-checked', String(S.autoFlip));
+    var kind = (TIME_CONTROLS[S.timeChoice] || TIME_CONTROLS.none).kind;
+    var help = mode === 'friend' && TIME_KINDS[kind].friendHelp ? TIME_KINDS[kind].friendHelp : TIME_KINDS[kind].help;
+    $('timeHelp').textContent = C.joinSentences([T(help), mode === 'friend' ? '' : T("The coach's checks never use your time.")]);
+  }
+
   function applyEvalVisibility() {
     document.body.classList.toggle('hide-eval', !S.showEval);
     ui.evalToggle.setAttribute('aria-checked', String(S.showEval));
@@ -1716,20 +1954,42 @@
     var topColor = C.opposite(S.orientation);
     var bottomColor = S.orientation;
     var lvl = LEVELS[S.levelIndex];
-    function fill(color, nameEl, sideEl, capsEl, advEl, avatarEl, clockEl) {
+    var checks = S.started && S.mode === 'threecheck' ? checksGiven(S.game) : null;
+    function fill(color, nameEl, sideEl, capsEl, advEl, avatarEl, clockEl, checksEl) {
       var isMe = color === S.playerColor;
-      if (S.started) {
+      if (checksEl) {
+        checksEl.hidden = !checks;
+        if (checks) {
+          var n = Math.min(3, checks[color]);
+          checksEl.innerHTML = '<i></i><i></i><i></i>';
+          for (var k = 0; k < n; k++) checksEl.children[k].className = 'is-given';
+          checksEl.setAttribute('aria-label', T('{n} of 3 checks given', { n: n }));
+          checksEl.title = checksEl.getAttribute('aria-label');
+        }
+      }
+      if (S.started && isFriend()) {
+        nameEl.textContent = C.colorName(color);
+        sideEl.textContent = S.game.turn() === color && S.phase !== 'over' ? T('to move') : '';
+        if (!avatarEl.classList.contains('avatar-pawn')) avatarEl.innerHTML = PAWN_AVATAR;
+        avatarEl.classList.add('avatar-pawn');
+        avatarEl.dataset.color = color;
+        delete avatarEl.dataset.level;
+      } else if (S.started) {
         nameEl.textContent = isMe ? T('You') : T('{level} bot', { level: levelName(S.levelIndex) });
         sideEl.textContent = '(' + C.colorName(color) + ')';
       } else {
         nameEl.textContent = isMe ? T('You') : T('Opponent');
         sideEl.textContent = '';
       }
-      if (isMe) {
+      if (S.started && isFriend()) {
+        /* both players have a pawn avatar, set above */
+      } else if (isMe) {
         if (!avatarEl.classList.contains('avatar-pawn')) avatarEl.innerHTML = PAWN_AVATAR;
         avatarEl.classList.add('avatar-pawn');
         delete avatarEl.dataset.level;
+        delete avatarEl.dataset.color;
       } else {
+        delete avatarEl.dataset.color;
         avatarEl.classList.remove('avatar-pawn');
         avatarEl.textContent = S.started ? lvl.glyph : '?';
         if (S.started) avatarEl.dataset.level = String(S.levelIndex);
@@ -1740,12 +2000,15 @@
       list.forEach(function (t) { capsEl.appendChild(createPieceEl({ t: t, c: C.opposite(color) }, 'cap')); });
       var diff = color === 'w' ? caps.diff : -caps.diff;
       advEl.textContent = diff > 0 ? '+' + diff : '';
-      clockEl.setAttribute('aria-label', isMe
-        ? (Clock.countdown() ? T('Your clock, time left') : T('Your clock, time used'))
-        : (Clock.countdown() ? T("The bot's clock, time left") : T("The bot's clock, time used")));
+      clockEl.setAttribute('aria-label', S.started && isFriend()
+        ? (Clock.countdown() ? T('{color} clock, time left', { color: C.colorName(color) }) : T('{color} clock, time used', { color: C.colorName(color) }))
+        : isMe
+          ? (Clock.countdown() ? T('Your clock, time left') : T('Your clock, time used'))
+          : (Clock.countdown() ? T("The bot's clock, time left") : T("The bot's clock, time used")));
     }
-    fill(topColor, ui.topName, ui.topSide, ui.topCaps, ui.topAdv, ui.topAvatar, ui.topClock);
-    fill(bottomColor, ui.bottomName, ui.bottomSide, ui.bottomCaps, ui.bottomAdv, ui.bottomAvatar, ui.bottomClock);
+    fill(topColor, ui.topName, ui.topSide, ui.topCaps, ui.topAdv, ui.topAvatar, ui.topClock, ui.topChecks);
+    fill(bottomColor, ui.bottomName, ui.bottomSide, ui.bottomCaps, ui.bottomAdv, ui.bottomAvatar, ui.bottomClock, ui.bottomChecks);
+    ui.viewPlay.dataset.mode = S.started ? S.mode : '';
     renderClocks();
   }
 
@@ -1758,13 +2021,15 @@
   function syncBoard(animate) {
     board.setOrientation(S.orientation);
     board.setFen(S.game.fen(), { animate: !!animate });
-    board.setMarks({ lastMove: lastMoveMark(), check: checkSquare(S.game), danger: [], hint: [] });
+    board.setMarks({ lastMove: lastMoveMark(), check: checkSquare(S.game), danger: [], hint: [], hill: S.mode === 'koth' ? HILL : [], premove: S.premove ? [S.premove.from, S.premove.to] : [] });
     board.setArrows([]);
     ui.evalBar.classList.toggle('flipped', S.orientation === 'b');
   }
 
   function refreshControls() {
-    var hasMine = S.game.history({ verbose: true }).some(function (m) { return m.color === S.playerColor; });
+    var hasMine = isFriend()
+      ? S.game.history().length > 0
+      : S.game.history({ verbose: true }).some(function (m) { return m.color === S.playerColor; });
     ui.btnTakeBack.disabled = !hasMine || S.phase === 'warning' || S.phase === 'promoting' || (S.phase === 'over' && !!Clock.flagged);
     ui.btnHint.disabled = S.phase !== 'player' || engine.failed;
     ui.btnNewGame.disabled = S.phase === 'warning' || S.phase === 'promoting';
@@ -1811,11 +2076,19 @@
     hideSummary();
     var tc = TIME_CONTROLS[S.timeChoice] || TIME_CONTROLS.none;
     Clock.reset(tc.base, tc.inc);
-    S.startFen = opts.fen || null;
+    var mode = opts.mode || S.modeChoice;
+    S.mode = GAME_MODES[mode] ? mode : 'standard';
+    S.odds = S.mode === 'odds' ? (ODDS[opts.odds] ? opts.odds : S.oddsChoice) : null;
+    S.checkBase = opts.checkBase || { w: 0, b: 0 };
+    S.premove = null;
+    S.variantNote = '';
+    if (S.mode === 'friend') S.playerColor = opts.color || 'w';
+    else S.playerColor = opts.color || (S.colorChoice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : S.colorChoice);
+    S.startFen = opts.fen || (S.mode === 'odds' ? oddsFen(S.playerColor, S.odds) : null);
     S.game = S.startFen ? new window.Chess(S.startFen) : new window.Chess();
     S.gameId = makeId();
-    S.playerColor = opts.color || (S.colorChoice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : S.colorChoice);
-    S.orientation = S.playerColor;
+    if (S.mode === 'friend') S.playerColor = S.game.turn();
+    S.orientation = S.mode === 'friend' && !S.autoFlip ? 'w' : S.playerColor;
     S.lastPlayerEvalP = null;
     S.liveEval = null;
     S.hintStage = 0;
@@ -1831,12 +2104,28 @@
     renderStrips();
     engine.newGame();
     Sound.play('start');
-    if (S.engineNotice) pushNotes([S.engineNotice], 'Engine');
-    if (opts.retry || S.startFen) {
+    if (S.engineNotice && S.mode !== 'friend') pushNotes([S.engineNotice], 'Engine');
+    if (S.mode === 'friend') {
+      pushNotes([{
+        tone: 'tip',
+        icon: '♔',
+        text: C.joinSentences([
+          opts.fen ? T('Playing on from this position with a friend.') : T('New game with a friend! White moves first.'),
+          S.autoFlip
+            ? T('Take turns on this device. The board turns around after each move, so the player to move always has their pieces at the bottom.')
+            : T('Take turns on this device. White plays from the bottom of the board, Black from the top.')
+        ])
+      }], T('Play a friend'));
+      saveGame();
+      friendTurn();
+      return;
+    }
+    var modeTips = modeIntro();
+    if (opts.retry || (S.startFen && S.mode !== 'odds')) {
       var tipText = opts.retry && opts.retry.move
         ? T("Let's try that moment again. Last time you chose to {move}, which was {loss}. Take a second look: what can the bot do after your move?", { move: C.moveAction(opts.retry.move, true), loss: C.lossLike(opts.retry.drop || 0) })
         : T('Playing on from this position. You are {color}, against {bot}.', { color: C.colorName(S.playerColor), bot: botName(S.levelIndex) });
-      pushNotes([{ tone: 'tip', icon: '↻', text: tipText }], opts.retry ? T('Try again') : T('Play from here'));
+      pushNotes([{ tone: 'tip', icon: '↻', text: tipText }].concat(modeTips), opts.retry ? T('Try again') : T('Play from here'));
       saveGame();
       if (S.game.turn() === S.playerColor) playerTurn(null);
       else botTurn();
@@ -1851,7 +2140,7 @@
           : T("New game! You're playing the black pieces, so the bot moves first. Your opponent is {bot}.", { bot: botName(S.levelIndex) }),
         S.guardOn ? T("Coach Guard is on, so I'll stop you before a big mistake and explain why.") : T('Coach Guard is off, but your big mistakes are still saved in My Blunder Bank.')
       ])
-    }].concat(loadStats().games < 3 ? [{
+    }].concat(modeTips, loadStats().games < 3 && S.mode === 'standard' ? [{
       tone: 'tip',
       icon: '?',
       text: T('Each square has a name made of a letter and a number, like e4. The letters run along the bottom edge of the board, the numbers up the side. The coach uses these names to point at squares.')
@@ -1859,6 +2148,73 @@
     saveGame();
     if (S.game.turn() === S.playerColor) playerTurn(null);
     else botTurn();
+  }
+
+  /** The coach's first note about the mode (empty for standard chess). */
+  function modeIntro() {
+    var text = null;
+    if (S.mode === 'odds') {
+      text = T('Head start: the bot plays without its {piece}, so you begin ahead. Trade pieces when you can: with fewer pieces on the board, your extra piece counts even more.', { piece: C.pieceName(S.odds) });
+    } else if (S.mode === 'koth') {
+      text = T('King of the Hill: checkmate wins, and so does getting your king to one of the four centre squares (marked on the board). The bot can win the same way, so keep an eye on its king too.');
+    } else if (S.mode === 'threecheck') {
+      text = T('Three-check: checkmate wins, and so does putting the other king in check three times. The dots next to each name count the checks. Checks are easier to give than checkmate, so look for them on every move.');
+    }
+    var tc = TIME_CONTROLS[S.timeChoice] || TIME_CONTROLS.none;
+    var tips = text ? [{ tone: 'tip', icon: S.mode === 'koth' ? '⛰' : S.mode === 'threecheck' ? '+' : '♛', text: text }] : [];
+    if (tc.kind === 'bullet') {
+      tips.push({ tone: 'tip', icon: '⚡', text: T('Bullet: {time}. Tip: while the bot is thinking you can already make your next move (a premove). It plays the moment the bot has moved, if it is still allowed. Tap any empty square to cancel it.', { time: T(tc.phrase) }) });
+    }
+    return tips;
+  }
+
+  /** Play a friend: it's this side's turn on the shared device. */
+  function friendTurn() {
+    S.phase = 'player';
+    S.hintStage = 0;
+    S.playerColor = S.game.turn();
+    var color = C.colorName(S.playerColor);
+    setStatus(ChessAPI.inCheck(S.game) ? T("Check! {color} to move.", { color: color }) : T('{color} to move.', { color: color }), 'you');
+    Clock.run(S.playerColor);
+    renderStrips();
+    refreshControls();
+    if (S.autoFlip && S.orientation !== S.playerColor) {
+      var epoch = S.epoch;
+      setTimeout(function () {
+        if (epoch !== S.epoch || S.phase !== 'player' || S.viewPly !== null) return;
+        S.orientation = S.playerColor;
+        syncBoard(false);
+        renderStrips();
+      }, 450);
+    }
+  }
+
+  /** Play a friend: a move was made; no coach, just the move and what it did. */
+  function friendMoved(mv) {
+    Clock.pause();
+    Clock.addIncrement(mv.color);
+    board.setFen(S.game.fen(), { animate: true });
+    board.setArrows([]);
+    board.setMarks({ lastMove: { from: mv.from, to: mv.to }, check: checkSquare(S.game), hint: [], danger: [] });
+    playMoveSound(mv, S.game, false);
+    renderMoveList();
+    var who = C.colorName(mv.color);
+    var other = C.colorName(C.opposite(mv.color));
+    var term = gameTerm(S.game);
+    var text = null;
+    if (term === 'checkmate') text = null;
+    else if (ChessAPI.inCheck(S.game)) text = T("Check! {color}'s king is under attack and must be saved on the next move.", { color: other });
+    else if (mv.flags && (mv.flags.indexOf('k') !== -1 || mv.flags.indexOf('q') !== -1)) text = T('{color} castled: the king is tucked away in the corner.', { color: who });
+    else if (mv.promotion) text = T("{color}'s pawn reached the last row and became {apiece}!", { color: who, apiece: C.aPiece(mv.promotion) });
+    else if (mv.captured) text = T('{color} took the {piece} on {sq}.', { color: who, piece: C.pieceName(mv.captured), sq: mv.to });
+    if (text) pushNotes([{ tone: 'tip', icon: '•', text: text }], moveLabel(mv));
+    if (term) {
+      renderStrips();
+      endGame(term);
+      return;
+    }
+    saveGame();
+    friendTurn();
   }
 
   function restoreGame() {
@@ -1879,15 +2235,26 @@
     for (var i = 0; i < data.moves.length; i++) {
       if (typeof data.moves[i] !== 'string' || !safeMove(g, uciToMove(data.moves[i]))) return false;
     }
-    if (ChessAPI.isGameOver(g)) return false;
+    var savedMode = typeof data.mode === 'string' && GAME_MODES[data.mode] ? data.mode : 'standard';
+    var cb = data.checkBase && typeof data.checkBase === 'object' ? data.checkBase : null;
+    S.mode = savedMode;
+    S.odds = savedMode === 'odds' && ODDS[data.odds] ? data.odds : null;
+    S.checkBase = cb ? { w: +cb.w || 0, b: +cb.b || 0 } : { w: 0, b: 0 };
+    S.premove = null;
+    S.variantNote = '';
+    if (ChessAPI.isGameOver(g) || variantTerm(g)) {
+      S.mode = 'standard';
+      return false;
+    }
     S.game = g;
     S.startFen = startFen;
-    S.playerColor = data.playerColor;
-    S.orientation = data.playerColor;
+    S.playerColor = savedMode === 'friend' ? g.turn() : data.playerColor;
+    S.orientation = savedMode === 'friend' && !S.autoFlip ? 'w' : S.playerColor;
     S.gameId = typeof data.gameId === 'string' ? data.gameId : makeId();
     S.lastSaveStamp = typeof data.savedAt === 'number' ? data.savedAt : 0;
     S.viewPly = null;
     S.started = true;
+    S.lastOutcome = null;
     var ck = data.clock;
     var okNum = function (n) { return typeof n === 'number' && isFinite(n) && n >= 0; };
     if (ck && okNum(ck.base) && okNum(ck.inc) && okNum(ck.w) && okNum(ck.b)) {
@@ -1905,7 +2272,8 @@
     ui.feed.innerHTML = '';
     if (S.engineNotice) pushNotes([S.engineNotice], 'Engine');
     pushNotes([{ tone: 'tip', icon: '♔', text: T('Welcome back. Your game is restored right where you left it.') }], T('Resumed'));
-    if (S.game.turn() === S.playerColor) playerTurn(null);
+    if (S.mode === 'friend') friendTurn();
+    else if (S.game.turn() === S.playerColor) playerTurn(null);
     else botTurn();
     return true;
   }
@@ -1919,6 +2287,8 @@
     var epoch = S.epoch;
     setStatus(ChessAPI.inCheck(S.game) ? T("Check! It's your move.") : T('Your move.'), 'you');
     refreshControls();
+    if (runPremove()) return;
+    if (isVariant()) variantNotes();
     // Look at the position while the player thinks: this is the "before"
     // evaluation the Coach Guard compares against.
     analyze(fen).then(function (a) {
@@ -1963,10 +2333,40 @@
     };
   }
 
-  async function onPlayerMove(from, to) {
+  /** King of the Hill and Three-check: point out a win, or the bot's threat to win. */
+  function variantNotes() {
+    var checks = checksGiven(S.game);
+    var wins = variantWins(S.game, S.playerColor, checks);
+    var key = '';
+    var text = null;
+    if (wins.length) {
+      key = 'win:' + S.game.fen();
+      text = S.mode === 'koth'
+        ? T('You can win right now: move your king to {sq}!', { sq: wins[0].to })
+        : T('You can win right now: give your third check!');
+    } else {
+      var g = passTurn(S.game);
+      var threat = g ? variantWins(g, oppColor(), checks) : [];
+      if (threat.length) {
+        key = 'threat:' + threat[0].to + ':' + checks[oppColor()];
+        text = S.mode === 'koth'
+          ? T("Watch out: the bot's king can reach {sq} next move and win. Guard that square, or check the king to push it back.", { sq: threat[0].to })
+          : T('Watch out: the bot has given 2 checks. One more check and it wins, so keep your king safe from checks.');
+      }
+    }
+    if (text && key !== S.variantNote) {
+      S.variantNote = key;
+      pushNotes([{ tone: wins.length ? 'good' : 'warn', icon: S.mode === 'koth' ? '⛰' : '+', text: text }], modeName(S.mode));
+      Sound.play('notify');
+    }
+  }
+
+  async function onPlayerMove(from, to, premovePromotion) {
     if (S.phase !== 'player' || S.viewPly !== null || S.game.turn() !== S.playerColor) return;
     var promotion = null;
-    if (needsPromotion(S.game, from, to)) {
+    if (premovePromotion && needsPromotion(S.game, from, to)) {
+      promotion = premovePromotion;
+    } else if (needsPromotion(S.game, from, to)) {
       var promoEpoch = S.epoch;
       S.phase = 'promoting';
       refreshControls();
@@ -1980,6 +2380,10 @@
     var mv = safeMove(S.game, promotion ? { from: from, to: to, promotion: promotion } : { from: from, to: to });
     if (!mv) {
       board.refresh();
+      return;
+    }
+    if (isFriend()) {
+      friendMoved(mv);
       return;
     }
     // The coach's check below doesn't use anyone's time.
@@ -1999,14 +2403,47 @@
 
     var before = await analyze(fenBefore);
     if (epoch !== S.epoch) return;
-    var term = terminalInfo(S.game);
+    var term = gameTerm(S.game);
     var after = term ? terminalAnalysis(S.game, term) : await analyze(fenAfter);
     if (epoch !== S.epoch) return;
 
     var verdict = judge(before, after, mv);
     var saved = false;
 
-    if (verdict && verdict.isBlunder) {
+    // King of the Hill / Three-check: does this move let the bot win straight away?
+    var vThreat = !term && isVariant() ? variantWins(S.game, oppColor(), checksGiven(S.game))[0] : null;
+    if (vThreat && S.guardOn) {
+      S.phase = 'warning';
+      refreshControls();
+      board.setMarks({ danger: [vThreat.to] });
+      board.setArrows([{ from: vThreat.from, to: vThreat.to, color: 'red' }]);
+      setStatus(T('Coach Guard: take a second look.'), 'warn');
+      Sound.play('warning');
+      var vMsg = S.mode === 'koth'
+        ? T("Careful! After this move the bot's king can walk to {sq}, a centre square, and win the game.", { sq: vThreat.to })
+        : T('Careful! After this move the bot can {move}. That would be its third check, and it would win the game.', { move: C.moveAction(describeUci(fenAfter, moveToUci(vThreat)), false) });
+      var vChoice = await showGuard({ message: vMsg, evalBefore: verdict ? verdict.pBefore : 0, evalAfter: -C.MATE_CP, afterText: T('Bot wins'), banked: false });
+      if (epoch !== S.epoch) return;
+      board.setMarks({ danger: [] });
+      board.setArrows([]);
+      if (vChoice === 'undo') {
+        S.game.undo();
+        S.review.saves++;
+        var vStats = loadStats();
+        vStats.saves++;
+        saveStats(vStats);
+        onProgress('guard-save');
+        Sound.play('undo');
+        syncBoard(true);
+        renderMoveList();
+        renderStrips();
+        pushNotes([{ tone: 'good', icon: '↶', text: C.joinSentences([T('Good call taking it back.'), T('Look for a safer move.')]) }], T('{move} (taken back)', { move: moveLabel(mv) }));
+        playerTurn(null);
+        return;
+      }
+    }
+
+    if (verdict && verdict.isBlunder && !vThreat) {
       var ref = after.bestMove ? describeUci(fenAfter, after.bestMove) : null;
       var pAfterRaw = C.perspective(after.whiteCp, S.playerColor);
       var oppMate = !after.terminal && C.isMateScore(after.whiteCp) && pAfterRaw < 0 ? C.mateDistance(after.whiteCp) : null;
@@ -2022,7 +2459,7 @@
         terminal: after.terminal && after.terminal !== 'checkmate' ? after.terminal : null,
         bestSan: verdict.bestSan
       });
-      var added = C.BlunderBank.add({
+      var added = isVariant() ? { isNew: false, entry: { id: null } } : C.BlunderBank.add({
         fen: fenBefore,
         color: S.playerColor,
         bestMove: verdict.bestMove,
@@ -2037,7 +2474,7 @@
         caught: false,
         gameId: S.gameId
       });
-      saved = true;
+      saved = !isVariant();
       if (added.isNew) S.bankedThisGame++;
 
       if (S.guardOn) {
@@ -2047,7 +2484,7 @@
         board.setArrows(explanation.threat ? [{ from: explanation.threat.from, to: explanation.threat.to, color: 'red' }] : []);
         setStatus(T('Coach Guard: take a second look.'), 'warn');
         Sound.play('warning');
-        var choice = await showGuard({ message: explanation.message, evalBefore: verdict.pBefore, evalAfter: verdict.pAfter });
+        var choice = await showGuard({ message: explanation.message, evalBefore: verdict.pBefore, evalAfter: verdict.pAfter, banked: !isVariant() });
         if (epoch !== S.epoch) return;
         board.setMarks({ danger: [] });
         board.setArrows([]);
@@ -2057,7 +2494,7 @@
           var savedStats = loadStats();
           savedStats.saves++;
           saveStats(savedStats);
-          C.BlunderBank.update(added.entry.id, { caught: true });
+          if (added.entry.id) C.BlunderBank.update(added.entry.id, { caught: true });
           onProgress('guard-save');
           Sound.play('undo');
           syncBoard(true);
@@ -2075,10 +2512,22 @@
     finalizePlayerMove(mv, fenBefore, fenAfter, verdict, saved, after);
   }
 
+  /** Three-check: say how many checks each side has after a checking move. */
+  function checkCountNote(mv) {
+    if (S.mode !== 'threecheck' || !/[+]$/.test(mv.san)) return [];
+    var n = checksGiven(S.game)[mv.color];
+    if (n >= 3) return [];
+    var mine = mv.color === S.playerColor;
+    var text = mine
+      ? (n === 1 ? T('Check 1 of 3! Two more checks win.') : T('Check 2 of 3! One more check wins.'))
+      : (n === 1 ? T('The bot has given 1 of 3 checks.') : T('The bot has given 2 of 3 checks. One more and it wins.'));
+    return [{ tone: mine ? 'good' : 'warn', icon: '+', text: text }];
+  }
+
   function finalizePlayerMove(mv, fenBefore, fenAfter, verdict, saved, after) {
     var hist = S.game.history({ verbose: true });
     var prevMove = hist.length >= 2 ? hist[hist.length - 2] : null;
-    var term = terminalInfo(S.game);
+    var term = gameTerm(S.game);
     var ply = hist.length;
     var cls = classifyMove(verdict);
     if (cls) S.review.quality[ply] = { cls: cls, san: mv.san, drop: verdict.drop, best: verdict.isBest ? null : verdict.bestMove };
@@ -2094,11 +2543,11 @@
       prevMove: prevMove,
       inCheck: ChessAPI.inCheck(S.game),
       isCheckmate: term === 'checkmate',
-      drawReason: term && term !== 'checkmate' ? term : null,
+      drawReason: term && term !== 'checkmate' && term !== 'hill' && term !== 'threecheck' ? term : null,
       verdict: verdict,
       savedToBank: saved
     });
-    pushNotes(tips, moveLabel(mv));
+    pushNotes(term === 'hill' || term === 'threecheck' ? [] : tips.concat(checkCountNote(mv)), moveLabel(mv));
     if (after && after.hasScore) {
       showEval(after);
       S.lastPlayerEvalP = C.perspective(after.whiteCp, S.playerColor);
@@ -2126,17 +2575,23 @@
     // Short on time, the bot moves faster, like a person would.
     var botLeft = Clock.countdown() ? Clock.value(botColor) : Infinity;
     var movetime = botLeft < 30000 ? Math.min(lvl.movetime, 150) : botLeft < 90000 ? Math.min(lvl.movetime, 400) : lvl.movetime;
-    var minThink = botLeft < 15000 ? 0 : MIN_BOT_THINK_MS;
+    // In Bullet the bot moves quickly too.
+    var fast = Clock.countdown() && Clock.base <= 2 * 60000;
+    if (fast) movetime = Math.min(movetime, 250);
+    var minThink = botLeft < 15000 ? 0 : fast ? 150 : MIN_BOT_THINK_MS;
     var t0 = Date.now();
     var uci = null;
+    var lines = null;
     if (lvl.random > 0 && Math.random() < lvl.random) {
       uci = randomMoveUci(S.game);
     } else {
-      var r = await engine.search({ fen: fen, skill: lvl.skill, depth: lvl.depth, movetime: movetime });
+      var r = await engine.search({ fen: fen, skill: lvl.skill, depth: lvl.depth, movetime: movetime, multipv: isVariant() ? 4 : 1 });
       if (epoch !== S.epoch) return;
       uci = r && r.bestMove;
+      lines = r && r.lines;
     }
     if (!uci) uci = randomMoveUci(S.game);
+    if (isVariant()) uci = variantBotMove(uci, lines);
     var wait = minThink - (Date.now() - t0);
     if (wait > 0) await sleep(wait);
     if (epoch !== S.epoch) return;
@@ -2165,8 +2620,12 @@
 
     var hist = S.game.history({ verbose: true });
     var prevMove = hist.length >= 2 ? hist[hist.length - 2] : null;
-    var term = terminalInfo(S.game);
+    var term = gameTerm(S.game);
     var label = moveLabel(mv);
+    if (term === 'hill' || term === 'threecheck') {
+      endGame(term);
+      return;
+    }
     pushNotes(C.describeMove({
       move: mv,
       fenBefore: fenBefore,
@@ -2179,7 +2638,7 @@
       isCheckmate: term === 'checkmate',
       drawReason: term && term !== 'checkmate' ? term : null,
       verdict: null
-    }), label);
+    }).concat(checkCountNote(mv)), label);
     if (term) {
       endGame(term);
       return;
@@ -2189,7 +2648,55 @@
   }
 
   /** Result of a finished game from the player's side: win, loss or draw, with the words for it. */
+  function friendOutcome(term) {
+    var winner = null;
+    if (term === 'checkmate') winner = C.opposite(S.game.turn());
+    if (term === 'timeout') {
+      var loser = Clock.flagged || S.game.turn();
+      winner = C.opposite(loser);
+      if (cannotMate(S.game, winner)) {
+        return {
+          result: 'draw',
+          status: T("Draw. {color} ran out of time, but the other side can't checkmate with what's left.", { color: C.colorName(loser) }),
+          summary: T('Draw: time ran out, with no way left to checkmate.')
+        };
+      }
+      return {
+        result: winner === 'w' ? 'white' : 'black',
+        status: T('{color} ran out of time. {winner} wins!', { color: C.colorName(loser), winner: C.colorName(winner) }),
+        summary: T('{color} won on time!', { color: C.colorName(winner) })
+      };
+    }
+    if (winner) {
+      return {
+        result: winner === 'w' ? 'white' : 'black',
+        status: T('Checkmate. {color} wins!', { color: C.colorName(winner) }),
+        summary: T('{color} won by checkmate!', { color: C.colorName(winner) })
+      };
+    }
+    return null;
+  }
+
   function gameOutcome(term) {
+    if (isFriend()) {
+      var fo = friendOutcome(term);
+      if (fo) return fo;
+    }
+    if (term === 'hill' || term === 'threecheck') {
+      var moverWon = C.opposite(S.game.turn()) === S.playerColor;
+      if (term === 'hill') {
+        return {
+          result: moverWon ? 'win' : 'loss',
+          status: moverWon ? T('Your king reached the centre. You win!') : T("The bot's king reached the centre. The bot wins."),
+          summary: moverWon ? T('You won: your king reached the centre!') : T('The bot won: its king reached the centre.')
+        };
+      }
+      return {
+        result: moverWon ? 'win' : 'loss',
+        status: moverWon ? T('Third check. You win!') : T('Third check. The bot wins.'),
+        summary: moverWon ? T('You won with three checks!') : T('The bot won with three checks.')
+      };
+    }
     if (term === 'checkmate') {
       var won = S.game.turn() !== S.playerColor;
       return {
@@ -2227,23 +2734,35 @@
   function endGame(term) {
     S.phase = 'over';
     Clock.pause();
+    clearPremove();
     showPane('game');
     store.remove(GAME_KEY);
     var outcome = gameOutcome(term);
     outcome.how = term;
     S.lastOutcome = outcome;
     setStatus(outcome.status, 'over', T('Replay the game to see where it turned, or start a new one.'));
-    ui.evalChip.textContent = outcome.result === 'win' ? T('You won') : outcome.result === 'loss' ? T('Bot won') : T('Draw');
+    ui.evalChip.textContent = outcome.result === 'win' ? T('You won') : outcome.result === 'loss' ? T('Bot won')
+      : outcome.result === 'white' ? T('{color} won', { color: C.colorName('w') })
+      : outcome.result === 'black' ? T('{color} won', { color: C.colorName('b') }) : T('Draw');
     refreshControls();
-    Sound.play(outcome.result === 'win' ? 'win' : outcome.result === 'loss' ? 'lose' : 'draw');
+    renderStrips();
+    Sound.play(outcome.result === 'loss' ? 'lose' : outcome.result === 'draw' ? 'draw' : 'win');
     recordGame(term, outcome.result);
+    var tcKind = (TIME_CONTROLS[S.timeChoice] || TIME_CONTROLS.none).kind;
     onProgress('game', {
-      result: outcome.result,
+      result: isFriend() ? 'friend' : outcome.result,
       how: term,
       level: S.levelIndex,
-      blunders: Object.keys(S.review.quality).filter(function (k) { return S.review.quality[k].cls === 'blunder'; }).length,
+      mode: S.mode,
+      fast: Clock.countdown() && (tcKind === 'bullet' || tcKind === 'blitz'),
+      blunders: isFriend() ? null : Object.keys(S.review.quality).filter(function (k) { return S.review.quality[k].cls === 'blunder'; }).length,
       moves: Math.ceil(S.game.history().length / 2)
     });
+    if (isFriend()) {
+      pushNotes([{ tone: 'tip', icon: '♔', text: T('Good game! Step back through the moves together to see where it turned.') }], T('Game over'));
+      showSummary(term);
+      return;
+    }
     var summary = S.bankedThisGame > 0
       ? (S.bankedThisGame === 1
         ? T('This game added 1 big mistake to My Blunder Bank as a puzzle. Solving it is the best way to stop making the same mistake again.')
@@ -2257,10 +2776,28 @@
     if (S.phase === 'warning' || S.phase === 'promoting') return;
     if (S.phase === 'over' && Clock.flagged) return; // a game lost on time stays finished
     var hist = S.game.history({ verbose: true });
+    if (isFriend()) {
+      if (!hist.length) return;
+      S.epoch++;
+      Clock.pause();
+      S.viewPly = null;
+      renderReviewBar();
+      hideSummary();
+      S.game.undo();
+      board.clearSelection();
+      syncBoard(true);
+      Sound.play('undo');
+      renderMoveList();
+      saveGame();
+      pushNotes([{ tone: 'tip', icon: '↶', text: T('Move taken back.') }], T('Take back'));
+      friendTurn();
+      return;
+    }
     if (!hist.some(function (m) { return m.color === S.playerColor; })) return;
     cancelEngineWork();
     S.epoch++;
     Clock.pause();
+    clearPremove();
     S.viewPly = null;
     renderReviewBar();
     hideSummary();
@@ -2298,6 +2835,10 @@
     if (!a || !a.bestMove) {
       pushNotes([{ tone: 'tip', icon: '?', text: T('The computer coach is still loading. Try the hint again in a moment.') }], T('Hint'));
       return;
+    }
+    if (isVariant()) {
+      var vw = variantWins(S.game, S.playerColor, checksGiven(S.game))[0];
+      if (vw) a = { bestMove: moveToUci(vw) };
     }
     var mv = uciToMove(a.bestMove);
     var p = C.parseFen(fen).board[C.sqToIdx(mv.from)];
@@ -2410,6 +2951,20 @@
       if (q.cls === 'blunder' && (firstBlunder === null || ply < firstBlunder)) firstBlunder = ply;
     });
     ui.summaryResult.textContent = gameOutcome(term).summary;
+    ui.summaryPanel.classList.toggle('is-friend', isFriend());
+    if (isFriend()) {
+      ui.summaryLine.textContent = C.joinSentences([
+        plural(Math.ceil(hist.length / 2), 'The game lasted {n} move.', 'The game lasted {n} moves.'),
+        T('Step back through the moves together to see where it turned.')
+      ]);
+      ui.momentsWrap.hidden = true;
+      ui.btnSummaryRetry.hidden = true;
+      ui.btnSummaryBank.hidden = true;
+      S.summaryStartPly = 0;
+      ui.btnSummaryReview.textContent = T('Replay the game');
+      ui.summaryPanel.hidden = false;
+      return;
+    }
     renderMoments();
     Array.prototype.forEach.call(ui.summaryPanel.querySelectorAll('[data-q]'), function (el) {
       el.textContent = String(counts[el.dataset.q] || 0);
@@ -2530,7 +3085,11 @@
     if (S.phase !== 'over' && hist.length && !window.confirm(T('Start a new game from this position? Your current game will end.'))) return;
     var q = mistakePly ? S.review.quality[mistakePly] : null;
     var retry = mistakePly ? { move: hist[mistakePly - 1], drop: q ? q.drop : 0 } : null;
-    newGame({ fen: g.fen(), color: S.playerColor, retry: retry });
+    var cb = { w: S.checkBase.w || 0, b: S.checkBase.b || 0 };
+    if (S.mode === 'threecheck') {
+      S.game.history({ verbose: true }).slice(0, ply).forEach(function (m) { if (/[+#]$/.test(m.san)) cb[m.color]++; });
+    }
+    newGame({ fen: g.fen(), color: isFriend() ? g.turn() : S.playerColor, retry: retry, mode: S.mode, odds: S.odds, checkBase: cb });
     showPane('game');
     if (isMobile()) ui.boardWrap.scrollIntoView({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
   }
@@ -2665,7 +3224,9 @@
     if (S.phase !== 'over' || !o) return;
     var bot = botName(S.levelIndex);
     var moves = Math.ceil(S.game.history().length / 2);
-    var title = o.result === 'win' ? T('I beat {bot}!', { bot: bot }) : o.result === 'draw' ? T('A draw with {bot}', { bot: bot }) : T('I played {bot}', { bot: bot });
+    var title = isFriend() ? T('A game of chess with a friend')
+      : o.result === 'win' ? T('I beat {bot}!', { bot: bot }) : o.result === 'draw' ? T('A draw with {bot}', { bot: bot }) : T('I played {bot}', { bot: bot });
+    if (!isFriend() && S.mode !== 'standard') title = T('{title} ({mode})', { title: title, mode: modeName(S.mode) });
     var sub = C.joinSentences([o.summary, moves === 1 ? T('1 move.') : T('{n} moves.', { n: moves })]);
     var text = C.joinSentences([title, T('Learn chess free on Second Look, with a coach that stops your blunders.')]);
     var url = location.origin + '/';
@@ -3255,7 +3816,11 @@
     { id: 'rating-1000', icon: '♛', name: 'Puzzle 1000', desc: 'Reach a puzzle rating of 1000.' },
     { id: 'goal', icon: '◎', name: 'Goal reached', desc: "Complete today's goal." },
     { id: 'streak-3', icon: '3', name: '3-day streak', desc: 'Practise 3 days in a row.' },
-    { id: 'streak-7', icon: '7', name: '7-day streak', desc: 'Practise 7 days in a row.' }
+    { id: 'streak-7', icon: '7', name: '7-day streak', desc: 'Practise 7 days in a row.' },
+    { id: 'fast', icon: '⚡', name: 'Fast hands', desc: 'Win a Bullet or Blitz game against a bot.' },
+    { id: 'hill', icon: '⛰', name: 'King of the Hill', desc: 'Win by walking your king to the centre.' },
+    { id: 'sprint-10', icon: '⏱', name: 'Sprinter', desc: 'Solve 10 puzzles in one Puzzle Sprint.' },
+    { id: 'survival-15', icon: '♥', name: 'Survivor', desc: 'Solve 15 puzzles in one Puzzle Survival.' }
   ];
 
   function dayKeyOffset(offset) {
@@ -3356,22 +3921,28 @@
       info = info || {};
       var d = this.today();
       var counted = false;
-      if (type === 'game') {
+      if (type === 'game' && info.result === 'friend') {
+        d.games++;
+        counted = true;
+        this.addXp(20);
+      } else if (type === 'game') {
         d.games++;
         counted = true;
         var win = info.result === 'win';
+        if (win && info.fast) this.award('fast');
+        if (win && info.how === 'hill') this.award('hill');
         this.addXp(20 + (win ? 20 : info.result === 'draw' ? 10 : 0) + (info.blunders === 0 && info.moves >= 10 ? 15 : 0));
         this.award('first-game');
         if (win) this.award('first-win');
         if (win && info.how === 'checkmate') this.award('checkmate');
-        if (win && info.level >= 2) this.award('beat-casual');
-        if (win && info.level >= 3) this.award('beat-club');
+        if (win && info.level >= 2 && info.mode !== 'odds') this.award('beat-casual');
+        if (win && info.level >= 3 && info.mode !== 'odds') this.award('beat-club');
         if (info.blunders === 0 && info.moves >= 10) this.award('clean-game');
       } else if (type === 'puzzle') {
         if (info.solved) {
           d.puzzles++;
           counted = true;
-          this.addXp(info.hinted ? 5 : 10);
+          this.addXp(info.rush ? 4 : info.hinted ? 5 : 10);
           if (info.daily && this.data.daily.solved !== todayKey()) {
             this.data.daily.solved = todayKey();
             this.addXp(15);
@@ -3397,6 +3968,9 @@
         }
       } else if (type === 'guard-save') {
         this.award('saved');
+      } else if (type === 'rush') {
+        if (info.kind === 'sprint' && info.score >= 10) this.award('sprint-10');
+        if (info.kind === 'survival' && info.score >= 15) this.award('survival-15');
       }
       if (counted) this.touchStreak();
       this.checkGoal();
@@ -4188,6 +4762,8 @@
     failed: false,
     hinted: false,
     daily: false,
+    mode: 'rated', // rated | sprint | survival
+    rush: null, // the Sprint or Survival run in progress
     pendingDaily: false,
     epoch: 0,
     timer: null,
@@ -4204,7 +4780,11 @@
         seen: Array.isArray(st.seen) ? st.seen.filter(function (x) { return typeof x === 'string'; }).slice(-800) : [],
         day: typeof st.day === 'string' ? st.day : '',
         today: parseInt(st.today, 10) || 0,
-        theme: typeof st.theme === 'string' ? st.theme : 'mixed'
+        theme: typeof st.theme === 'string' ? st.theme : 'mixed',
+        rushBest: {
+          sprint: st.rushBest && parseInt(st.rushBest.sprint, 10) || 0,
+          survival: st.rushBest && parseInt(st.rushBest.survival, 10) || 0
+        }
       };
       if (this.stats.day !== todayKey()) {
         this.stats.day = todayKey();
@@ -4251,6 +4831,10 @@
       $('btnPzSolution').addEventListener('click', function () { self.reveal(); });
       $('btnPzNext').addEventListener('click', function () { self.next(); });
       $('btnPzRetry').addEventListener('click', function () { if (self.cur) self.open(self.cur, true); });
+      Array.prototype.forEach.call(document.querySelectorAll('input[name="pzMode"]'), function (input) {
+        input.addEventListener('change', function () { if (input.checked) self.setMode(input.value); });
+      });
+      $('btnRushStart').addEventListener('click', function () { self.startRush(); });
       this.renderThemes();
       this.renderStats();
     },
@@ -4268,7 +4852,10 @@
         this.stats.day = todayKey();
         this.stats.today = 0;
       }
-      $('pzRating').textContent = String(Math.round(this.stats.rating));
+      if (this.mode === 'rated') {
+        $('pzRatingLabel').textContent = T('Rating');
+        $('pzRating').textContent = String(Math.round(this.stats.rating));
+      }
       $('pzSolvedToday').textContent = String(this.stats.today);
       $('pzStreak').textContent = String(this.stats.streak);
       $('pzSolvedTotal').textContent = String(this.stats.solved);
@@ -4283,6 +4870,7 @@
 
     setButtons: function () {
       var active = this.phase === 'solving' || this.phase === 'wrong' || this.phase === 'intro';
+      $('btnRushStart').disabled = !!(this.rush && this.rush.running);
       $('btnPzHint').disabled = this.phase !== 'solving' || this.hinted;
       $('btnPzSolution').disabled = !active;
       $('btnPzNext').disabled = !this.data;
@@ -4324,6 +4912,10 @@
       var self = this;
       this.renderStats();
       if (this.pendingDaily) return;
+      if (this.mode !== 'rated') {
+        if (!this.rush) this.showRushIntro(null);
+        return;
+      }
       if (this.cur && this.phase !== 'error') return;
       this.load().then(function (d) { if (d && !self.cur) self.next(); });
     },
@@ -4352,6 +4944,7 @@
     /** Open today's puzzle (the same one for everyone today). */
     openDaily: function () {
       var self = this;
+      if (this.mode !== 'rated') this.setMode('rated', true);
       this.pendingDaily = true;
       showTab('puzzles');
       this.load().then(function (d) {
@@ -4388,7 +4981,7 @@
       this.phase = 'intro';
       var mainTag = p.tags.indexOf('mate1') !== -1 ? 'mate1' : p.tags.indexOf('mate2') !== -1 ? 'mate2' : p.tags[0];
       var theme = this.stats.theme === 'mixed' ? puzzleTheme(mainTag) : puzzleTheme(this.stats.theme);
-      $('pzTitle').textContent = this.daily ? T('Puzzle of the day') : T(theme.title);
+      $('pzTitle').textContent = this.rush ? T(this.rush.kind === 'sprint' ? 'Puzzle Sprint' : 'Puzzle Survival') : this.daily ? T('Puzzle of the day') : T(theme.title);
       $('pzSide').textContent = T('(you are {color})', { color: C.colorName(this.color) });
       $('pzTask').textContent = p.tags.indexOf('mate1') !== -1 ? T('Find checkmate in 1 move')
         : p.tags.indexOf('mate2') !== -1 ? T('Find checkmate in 2 moves')
@@ -4470,6 +5063,10 @@
     },
 
     wrong: function (mv) {
+      if (this.rush) {
+        this.rushWrong(mv);
+        return;
+      }
       var self = this;
       var epoch = this.epoch;
       this.phase = 'wrong';
@@ -4511,6 +5108,10 @@
     },
 
     solved: function (mv) {
+      if (this.rush) {
+        this.rushSolved(mv);
+        return;
+      }
       this.phase = 'solved';
       Sound.play('correct');
       var delta = 0;
@@ -4576,6 +5177,178 @@
       }
       step();
       this.renderStats();
+    },
+
+    /* ---------------------------------------------- Puzzle Sprint and Survival */
+
+    /** Rated puzzles, a 3-minute Sprint, or Survival (three mistakes and you're out). */
+    setMode: function (mode, quiet) {
+      if (mode !== 'sprint' && mode !== 'survival') mode = 'rated';
+      if (this.rush && this.rush.running) this.endRush('quit');
+      this.rush = null;
+      this.mode = mode;
+      $('view-puzzles').dataset.pzmode = mode;
+      Array.prototype.forEach.call(document.querySelectorAll('input[name="pzMode"]'), function (input) { input.checked = input.value === mode; });
+      if (mode === 'rated') {
+        $('rushIntro').hidden = true;
+        $('rushBoard').hidden = true;
+        this.renderStats();
+        if (!quiet) {
+          this.cur = null;
+          this.next();
+        }
+      } else {
+        this.showRushIntro(null);
+      }
+    },
+
+    showRushIntro: function (result) {
+      clearTimeout(this.timer);
+      this.epoch++;
+      this.phase = 'idle';
+      this.cur = null;
+      this.game = null;
+      var sprint = this.mode === 'sprint';
+      var name = T(sprint ? 'Puzzle Sprint' : 'Puzzle Survival');
+      var best = this.stats.rushBest[this.mode] || 0;
+      if (!result) {
+        this.board.clearSelection();
+        this.board.setOrientation('w');
+        this.board.setFen(START_FEN);
+        this.board.setMarks({ lastMove: null, check: null, danger: [], hint: [] });
+        this.board.setArrows([]);
+      }
+      $('rushIntro').hidden = false;
+      $('rushBoard').hidden = !result;
+      $('rushTitle').textContent = result ? (result.reason === 'time' ? T("Time's up!") : result.reason === 'strikes' ? T('Three mistakes: the run is over.') : T('You solved every puzzle!')) : name;
+      $('rushText').textContent = result
+        ? C.joinSentences([plural(result.score, 'You solved {n} puzzle.', 'You solved {n} puzzles.'), result.newBest && result.score > 0 ? T('That is a new best!') : ''])
+        : sprint
+          ? T('Solve as many puzzles as you can in 3 minutes. They start easy and get harder. Three wrong moves end the run.')
+          : T('Solve puzzles until you make three mistakes. There is no clock, so take your time. They start easy and get harder.');
+      $('rushBest').textContent = best ? T('Your best: {n}', { n: best }) : '';
+      $('btnRushStart').textContent = result ? T('Play again') : T('Start');
+      $('pzTitle').textContent = name;
+      $('pzSide').textContent = '';
+      $('pzTask').textContent = sprint ? T('3 minutes, 3 lives') : T('3 lives, no clock');
+      $('pzRatingLabel').textContent = T('Best');
+      $('pzRating').textContent = String(best);
+      this.status(result ? T('Run over.') : T('Press Start when you are ready.'), result ? 'over' : 'you', '');
+      this.setButtons();
+    },
+
+    startRush: function () {
+      var self = this;
+      this.load().then(function (data) {
+        if (!data || !data.length || self.mode === 'rated') return;
+        var sprint = self.mode === 'sprint';
+        if (self.rush && self.rush.tick) clearInterval(self.rush.tick);
+        self.rush = { kind: self.mode, score: 0, strikes: 0, used: {}, running: true, endsAt: sprint ? Date.now() + 180000 : 0, tick: null };
+        $('rushIntro').hidden = true;
+        $('rushBoard').hidden = false;
+        $('pzRatingLabel').textContent = T('Solved');
+        if (sprint) self.rush.tick = setInterval(function () { self.rushTick(); }, 200);
+        self.renderRush();
+        Sound.play('start');
+        self.rushNext();
+      });
+    },
+
+    /** Puzzles get harder as the score goes up. */
+    rushPick: function () {
+      var r = this.rush;
+      var target = 350 + r.score * 45;
+      var pool = this.data.filter(function (p) { return !r.used[p.id]; });
+      pool.sort(function (a, b) { return Math.abs(a.rating - target) - Math.abs(b.rating - target); });
+      var choices = pool.slice(0, 8);
+      return choices[Math.floor(Math.random() * choices.length)] || null;
+    },
+
+    rushNext: function () {
+      if (!this.rush || !this.rush.running) return;
+      var p = this.rushPick();
+      if (!p) {
+        this.endRush('done');
+        return;
+      }
+      this.rush.used[p.id] = true;
+      this.open(p, false);
+    },
+
+    rushTick: function () {
+      var r = this.rush;
+      if (!r || !r.running) return;
+      var left = r.endsAt - Date.now();
+      $('rushTime').textContent = formatClock(left, true);
+      $('rushTimeWrap').classList.toggle('is-low', left < 20000);
+      if (left <= 0) this.endRush('time');
+    },
+
+    renderRush: function () {
+      var r = this.rush;
+      if (!r) return;
+      $('rushScore').textContent = String(r.score);
+      $('pzRating').textContent = String(r.score);
+      $('rushTimeWrap').hidden = r.kind !== 'sprint';
+      if (r.kind === 'sprint') $('rushTime').textContent = formatClock(Math.max(0, r.endsAt - Date.now()), true);
+      var lives = $('rushLives');
+      Array.prototype.forEach.call(lives.children, function (el, i) { el.classList.toggle('is-lost', i < r.strikes); });
+      lives.setAttribute('aria-label', T('{n} of 3 mistakes', { n: r.strikes }));
+    },
+
+    rushSolved: function () {
+      var self = this;
+      var epoch = this.epoch;
+      this.phase = 'solved';
+      this.rush.score++;
+      Sound.play('correct');
+      this.status(T('Solved!'), 'over', '', 'good');
+      this.renderRush();
+      this.setButtons();
+      onProgress('puzzle', { solved: true, rush: true, total: this.stats.solved, rating: this.stats.rating });
+      this.timer = setTimeout(function () {
+        if (epoch === self.epoch) self.rushNext();
+      }, 450);
+    },
+
+    rushWrong: function () {
+      var self = this;
+      var epoch = this.epoch;
+      this.phase = 'wrong';
+      this.rush.strikes++;
+      Sound.play('wrong');
+      var u = this.cur.moves[this.idx];
+      if (u) this.board.setArrows([{ from: u.slice(0, 2), to: u.slice(2, 4), color: 'green' }]);
+      this.status(T('Not that one.'), 'warn', T('The green arrow shows the right move.'), 'bad');
+      this.renderRush();
+      this.setButtons();
+      var over = this.rush.strikes >= 3;
+      this.timer = setTimeout(function () {
+        if (epoch !== self.epoch) return;
+        if (over) self.endRush('strikes');
+        else self.rushNext();
+      }, 1100);
+    },
+
+    endRush: function (reason) {
+      var r = this.rush;
+      if (!r || !r.running) return;
+      r.running = false;
+      clearInterval(r.tick);
+      clearTimeout(this.timer);
+      this.epoch++;
+      if (reason === 'quit') return;
+      var prev = this.stats.rushBest[r.kind] || 0;
+      var newBest = r.score > prev;
+      if (newBest) {
+        this.stats.rushBest[r.kind] = r.score;
+        this.saveStats();
+      }
+      onProgress('rush', { kind: r.kind, score: r.score });
+      Sound.play(newBest && r.score > 0 ? 'win' : 'draw');
+      this.board.setArrows([]);
+      this.showRushIntro({ reason: reason, score: r.score, newBest: newBest });
+      this.rush = null;
     },
 
     /** Elo-style update; returns the change in points. */
@@ -4714,16 +5487,20 @@
     var bankStats = C.BlunderBank.stats();
 
     var clean = 0;
-    for (var i = 0; i < games.length && games[i].blunders === 0; i++) clean++;
+    for (var i = 0, list = games.filter(function (g) { return g.mode !== 'friend'; }); i < list.length && list[i].blunders === 0; i++) clean++;
     ui.statClean.textContent = String(clean);
     renderProgressHome();
 
     renderLevelChips();
     var colour = S.colorChoice === 'random' ? T('a random colour') : C.colorName(S.colorChoice === 'b' ? 'b' : 'w');
     var tcPhrase = T((TIME_CONTROLS[S.timeChoice] || TIME_CONTROLS.none).phrase);
+    var friendNext = S.modeChoice === 'friend';
+    ui.levelChips.hidden = friendNext;
+    $('playCardTitle').textContent = friendNext ? T('Play a friend') : T('Play vs bot');
     ui.homeNote.textContent = C.joinSentences([
-      T('You play {color} with {time}.', { color: colour, time: tcPhrase }),
-      S.guardOn ? T('Coach Guard is on.') : T('Coach Guard is off.')
+      S.modeChoice !== 'standard' ? T('Mode: {mode}.', { mode: modeName(S.modeChoice) }) : '',
+      friendNext ? T('Two players on this device, {time}.', { time: tcPhrase }) : T('You play {color}, {time}.', { color: colour, time: tcPhrase }),
+      friendNext ? '' : S.guardOn ? T('Coach Guard is on.') : T('Coach Guard is off.')
     ]);
     ui.btnHomeContinue.hidden = !(S.started && S.phase !== 'over' && S.game.history().length > 0);
 
@@ -4751,22 +5528,34 @@
       li.className = 'history-item';
       var badge = document.createElement('span');
       badge.className = 'result-badge result-' + g.result;
-      badge.textContent = g.result === 'win' ? T('W') : g.result === 'loss' ? T('L') : '½';
-      badge.setAttribute('aria-label', g.result === 'win' ? T('Win') : g.result === 'loss' ? T('Loss') : T('Draw'));
+      var friendGame = g.mode === 'friend';
+      badge.textContent = g.result === 'win' ? T('W') : g.result === 'loss' ? T('L') : g.result === 'white' ? '1–0' : g.result === 'black' ? '0–1' : '½';
+      badge.setAttribute('aria-label', g.result === 'win' ? T('Win') : g.result === 'loss' ? T('Loss')
+        : g.result === 'white' ? T('{color} won', { color: C.colorName('w') })
+        : g.result === 'black' ? T('{color} won', { color: C.colorName('b') }) : T('Draw'));
+      if (friendGame) badge.className = 'result-badge result-friend';
       var text = document.createElement('span');
       text.className = 'history-text';
       var title = document.createElement('span');
       title.className = 'history-title';
-      title.textContent = T('vs {level} bot', { level: levelName(LEVELS[g.level] ? g.level : 2) });
+      var vsText = friendGame ? T('Game with a friend') : T('vs {level} bot', { level: levelName(LEVELS[g.level] ? g.level : 2) });
+      var extra = [];
+      if (g.mode && g.mode !== 'standard' && g.mode !== 'friend' && GAME_MODES[g.mode]) extra.push(modeName(g.mode));
+      var gtc = TIME_CONTROLS[g.time];
+      if (gtc && gtc.kind !== 'none') extra.push(T(TIME_KINDS[gtc.kind].name));
+      title.textContent = extra.length ? T('{title} ({mode})', { title: vsText, mode: extra.join(', ') }) : vsText;
       var sub = document.createElement('span');
       sub.className = 'history-sub';
-      var how = T({ checkmate: 'Checkmate', timeout: 'On time', stalemate: 'Stalemate', repetition: 'Repetition', insufficient: 'Not enough pieces', fifty: '50-move rule' }[g.how] || 'Finished');
-      sub.textContent = plural(g.moves, '{how}, {n} move as {color}, {when}', '{how}, {n} moves as {color}, {when}', { how: how, color: C.colorName(g.color === 'b' ? 'b' : 'w'), when: relativeDay(g.at) });
+      var how = T({ checkmate: 'Checkmate', timeout: 'On time', stalemate: 'Stalemate', repetition: 'Repetition', insufficient: 'Not enough pieces', fifty: '50-move rule', hill: 'King to the centre', threecheck: 'Three checks' }[g.how] || 'Finished');
+      sub.textContent = friendGame
+        ? plural(g.moves, '{how}, {n} move, {when}', '{how}, {n} moves, {when}', { how: how, when: relativeDay(g.at) })
+        : plural(g.moves, '{how}, {n} move as {color}, {when}', '{how}, {n} moves as {color}, {when}', { how: how, color: C.colorName(g.color === 'b' ? 'b' : 'w'), when: relativeDay(g.at) });
       text.appendChild(title);
       text.appendChild(sub);
       var tag = document.createElement('span');
       tag.className = 'history-tag ' + (g.blunders ? 'has-blunders' : 'is-clean');
-      tag.textContent = g.blunders ? plural(g.blunders, '{n} blunder', '{n} blunders') : T('Clean');
+      tag.textContent = friendGame ? '' : g.blunders ? plural(g.blunders, '{n} blunder', '{n} blunders') : T('Clean');
+      tag.hidden = friendGame;
       li.appendChild(badge);
       li.appendChild(text);
       li.appendChild(tag);
@@ -5074,6 +5863,8 @@
       levelCards: $('levelCards'),
       topSide: $('topSide'),
       bottomSide: $('bottomSide'),
+      topChecks: $('topChecks'),
+      bottomChecks: $('bottomChecks'),
       topName: $('topName'),
       topCaps: $('topCaps'),
       topAdv: $('topAdv'),
@@ -5162,14 +5953,24 @@
     };
 
     board = new BoardView($('board'), {
-      interactive: function () { return S.phase === 'player' && S.viewPly === null; },
+      interactive: function () { return (S.phase === 'player' && S.viewPly === null) || premoveOpen(); },
       canMoveFrom: function (sq) {
-        if (S.phase !== 'player' || S.viewPly !== null || S.game.turn() !== S.playerColor) return false;
         var p = S.game.get(sq);
+        if (premoveOpen()) return !!p && p.color === S.playerColor;
+        if (S.phase !== 'player' || S.viewPly !== null || S.game.turn() !== S.playerColor) return false;
         return !!p && p.color === S.playerColor;
       },
-      legalTargets: function (sq) { return legalTargets(S.game, sq); },
-      onMove: function (from, to) { onPlayerMove(from, to); }
+      legalTargets: function (sq) { return premoveOpen() ? premoveTargets(sq) : legalTargets(S.game, sq); },
+      onMove: function (from, to) {
+        if (premoveOpen()) setPremove(from, to);
+        else onPlayerMove(from, to);
+      },
+      onIdleClick: function () { clearPremove(); }
+    });
+    $('board').addEventListener('contextmenu', function (e) {
+      if (!S.premove) return;
+      e.preventDefault();
+      clearPremove();
     });
     homeBoard = new BoardView($('homeBoard'), {});
     dailyBoard = new BoardView($('dailyBoard'), {});
@@ -5246,7 +6047,65 @@
         if (!input.checked) return;
         S.timeChoice = input.value;
         saveSettings();
+        renderNewGameForm();
         if (!S.started) showHome();
+      });
+    });
+
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="gameMode"]'), function (input) {
+      input.addEventListener('change', function () {
+        if (!input.checked) return;
+        S.modeChoice = input.value;
+        saveSettings();
+        renderNewGameForm();
+        if (!S.started) showHome();
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="oddsPiece"]'), function (input) {
+      input.addEventListener('change', function () {
+        if (!input.checked) return;
+        S.oddsChoice = input.value;
+        saveSettings();
+      });
+    });
+    $('flipToggle').addEventListener('click', function () {
+      S.autoFlip = !S.autoFlip;
+      saveSettings();
+      renderNewGameForm();
+      if (S.started && isFriend() && S.phase === 'player') {
+        S.orientation = S.autoFlip ? S.playerColor : 'w';
+        syncBoard(false);
+        renderStrips();
+      }
+    });
+    $('btnFriendStart').addEventListener('click', function () {
+      if (S.phase === 'warning' || S.phase === 'promoting') return;
+      if (S.started && S.phase !== 'over' && S.game.history().length && !window.confirm(T('Start a new game? Your current game will end.'))) return;
+      newGame({ mode: 'friend' });
+      showPane('game');
+    });
+    renderNewGameForm();
+
+    // Home: ways to play
+    Array.prototype.forEach.call(document.querySelectorAll('[data-way]'), function (btn) {
+      btn.addEventListener('click', function () {
+        var way = btn.dataset.way;
+        if (way === 'sprint' || way === 'survival') {
+          showTab('puzzles');
+          Puzzles.setMode(way);
+          return;
+        }
+        if (way === 'bullet' || way === 'blitz' || way === 'rapid') {
+          S.timeChoice = { bullet: '1', blitz: '3+2', rapid: '10' }[way];
+          if (S.modeChoice === 'friend') S.modeChoice = 'standard';
+        } else {
+          S.modeChoice = way;
+        }
+        saveSettings();
+        renderNewGameForm();
+        goToPlay('new');
+        var pane = $('pane-new');
+        if (pane && pane.scrollTo) pane.scrollTo(0, 0);
       });
     });
 
@@ -5396,6 +6255,11 @@
     });
     ui.btnHomeStart.addEventListener('click', function () {
       if (S.phase === 'warning' || S.phase === 'promoting') return;
+      if (S.modeChoice === 'friend') {
+        newGame({ mode: 'friend' });
+        goToPlay('game');
+        return;
+      }
       S.levelIndex = S.homeLevel;
       saveSettings();
       renderLevelCards();

@@ -460,9 +460,12 @@
     return mine ? T('move your {piece} from {from} to {to}{promo}', p) : T('move its {piece} from {from} to {to}{promo}', p);
   }
 
-  /** Short label for the coach feed: "You: knight to f3", "Bot: bishop takes pawn on c4". */
-  function moveTitle(m, mine) {
-    if (!m) return mine ? T('You') : T('Bot');
+  /**
+   * Short label for the coach feed: "You: knight to f3", "Bot: bishop takes pawn on c4".
+   * With `who` (e.g. "White"), the label names that player instead.
+   */
+  function moveTitle(m, mine, who) {
+    if (!m) return who || (mine ? T('You') : T('Bot'));
     var p = {
       piece: pieceName(m.piece),
       captured: m.captured ? pieceName(m.captured) : '',
@@ -474,6 +477,7 @@
     else if (isEnPassant(m)) move = T('pawn takes pawn (en passant)');
     else if (m.captured) move = T('{piece} takes {captured} on {to}{promo}', p);
     else move = T('{piece} to {to}{promo}', p);
+    if (who) return T('{who}: {move}', { who: who, move: move });
     return mine ? T('You: {move}', { move: move }) : T('Bot: {move}', { move: move });
   }
 

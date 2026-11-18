@@ -217,6 +217,21 @@
               <p class="home-note" id="homeNote"></p>
             </section>
 
+            <section class="home-card ways-card" aria-labelledby="waysTitle">
+              <h2 class="home-card-title font-display" id="waysTitle">Ways to play</h2>
+              <div class="ways-grid">
+                <button type="button" class="way" data-way="bullet"><span class="way-icon way-bullet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.6 4.6c2.6-1.6 5.3-2.1 6.4-1 1.1 1.1.6 3.8-1 6.4l-6.3 6.3-5.4-5.4z" fill="currentColor"/><path d="m5.6 12.4 6 6-1.8 1.8-6-6z" fill="currentColor"/></svg></span><span class="way-name">Bullet</span><span class="way-sub">1 minute</span></button>
+                <button type="button" class="way" data-way="blitz"><span class="way-icon way-blitz"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 2 4.5 13.5h6.2L9.8 22l9.4-12.3H13z" fill="currentColor"/></svg></span><span class="way-name">Blitz</span><span class="way-sub">3 | 2</span></button>
+                <button type="button" class="way" data-way="rapid"><span class="way-icon way-rapid"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4.5l3 2M9.5 2.5h5"/></svg></span><span class="way-name">Rapid</span><span class="way-sub">10 minutes</span></button>
+                <button type="button" class="way" data-way="odds"><span class="way-icon way-glyph mode-odds">♛</span><span class="way-name">Head start</span><span class="way-sub">The bot gives up a piece</span></button>
+                <button type="button" class="way" data-way="koth"><span class="way-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="8.5" y="8.5" width="7" height="7" rx="1" fill="currentColor"/></svg></span><span class="way-name">King of the Hill</span><span class="way-sub">King to the centre wins</span></button>
+                <button type="button" class="way" data-way="threecheck"><span class="way-icon way-word">3+</span><span class="way-name">Three-check</span><span class="way-sub">Give 3 checks to win</span></button>
+                <button type="button" class="way" data-way="friend"><span class="way-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="3.2" fill="currentColor"/><path d="M2.5 19.5c.4-4 2.6-6.2 5.5-6.2s5.1 2.2 5.5 6.2z" fill="currentColor"/><circle cx="16.5" cy="8" r="2.7" fill="currentColor" opacity=".6"/><path d="M14.6 13.6c.6-.2 1.2-.3 1.9-.3 2.6 0 4.5 2 4.9 5.6h-5.1c-.3-2-.9-3.9-1.7-5.3z" fill="currentColor" opacity=".6"/></svg></span><span class="way-name">Play a friend</span><span class="way-sub">Two players, one device</span></button>
+                <button type="button" class="way" data-way="sprint"><span class="way-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h5a3 3 0 0 1 6 0h5v5a3 3 0 0 1 0 6v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span><span class="way-name">Puzzle Sprint</span><span class="way-sub">3 minutes</span></button>
+                <button type="button" class="way" data-way="survival"><span class="way-icon way-heart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2z" fill="currentColor"/></svg></span><span class="way-name">Puzzle Survival</span><span class="way-sub">3 lives</span></button>
+              </div>
+            </section>
+
             <section class="home-card puzzle-card daily-card" aria-labelledby="dailyTitle">
               <div class="mini-board-wrap"><div id="dailyBoard" class="board board-mini" aria-hidden="true"></div></div>
               <div class="puzzle-card-side">
@@ -314,6 +329,7 @@
               <span class="strip-line">
                 <span class="strip-name" id="topName">Bot</span>
                 <span class="strip-side" id="topSide"></span>
+                <span class="check-pips" id="topChecks" hidden></span>
               </span>
               <span class="strip-sub">
                 <span class="strip-caps" id="topCaps"></span>
@@ -340,6 +356,7 @@
               <span class="strip-line">
                 <span class="strip-name" id="bottomName">You</span>
                 <span class="strip-side" id="bottomSide"></span>
+                <span class="check-pips" id="bottomChecks" hidden></span>
               </span>
               <span class="strip-sub">
                 <span class="strip-caps" id="bottomCaps"></span>
@@ -442,6 +459,58 @@
           <!-- New game pane -->
           <div class="side-body" id="pane-new" role="tabpanel" aria-labelledby="ptab-new" hidden>
             <fieldset class="play-as">
+              <legend class="block-title font-display">Game mode</legend>
+              <div class="mode-grid" role="radiogroup" aria-label="Game mode" aria-describedby="modeHelp">
+                <label class="mode-card"><input type="radio" name="gameMode" value="standard" checked><span class="mode-face"><span class="mode-icon mode-glyph" aria-hidden="true">♔</span><span class="mode-text"><span class="mode-name">Standard</span><span class="mode-sub">Normal chess</span></span></span></label>
+                <label class="mode-card"><input type="radio" name="gameMode" value="odds"><span class="mode-face"><span class="mode-icon mode-glyph mode-odds" aria-hidden="true">♛</span><span class="mode-text"><span class="mode-name">Head start</span><span class="mode-sub">The bot gives up a piece</span></span></span></label>
+                <label class="mode-card"><input type="radio" name="gameMode" value="koth"><span class="mode-face"><span class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><rect x="8.5" y="8.5" width="7" height="7" rx="1" fill="currentColor"/></svg></span><span class="mode-text"><span class="mode-name">King of the Hill</span><span class="mode-sub">King to the centre wins</span></span></span></label>
+                <label class="mode-card"><input type="radio" name="gameMode" value="threecheck"><span class="mode-face"><span class="mode-icon mode-word" aria-hidden="true">3+</span><span class="mode-text"><span class="mode-name">Three-check</span><span class="mode-sub">Give 3 checks to win</span></span></span></label>
+                <label class="mode-card mode-card-wide"><input type="radio" name="gameMode" value="friend"><span class="mode-face"><span class="mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="3.2" fill="currentColor"/><path d="M2.5 19.5c.4-4 2.6-6.2 5.5-6.2s5.1 2.2 5.5 6.2z" fill="currentColor"/><circle cx="16.5" cy="8" r="2.7" fill="currentColor" opacity=".6"/><path d="M14.6 13.6c.6-.2 1.2-.3 1.9-.3 2.6 0 4.5 2 4.9 5.6h-5.1c-.3-2-.9-3.9-1.7-5.3z" fill="currentColor" opacity=".6"/></svg></span><span class="mode-text"><span class="mode-name">Play a friend</span><span class="mode-sub">Two players, one device</span></span></span></label>
+              </div>
+              <p class="block-help mode-help" id="modeHelp">Normal chess against a bot.</p>
+              <div class="odds-pick" id="oddsPick" hidden>
+                <span class="odds-label" id="oddsLabel">The bot plays without its</span>
+                <div class="segmented" role="radiogroup" aria-labelledby="oddsLabel">
+                  <label><input type="radio" name="oddsPiece" value="q" checked><span>Queen</span></label>
+                  <label><input type="radio" name="oddsPiece" value="r"><span>Rook</span></label>
+                  <label><input type="radio" name="oddsPiece" value="n"><span>Knight</span></label>
+                </div>
+              </div>
+            </fieldset>
+            <fieldset class="play-as">
+              <legend class="block-title font-display">Time</legend>
+              <div class="tc-groups" aria-describedby="timeHelp">
+                <div class="tc-group">
+                  <span class="tc-kind tc-bullet" id="tcBullet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.6 4.6c2.6-1.6 5.3-2.1 6.4-1 1.1 1.1.6 3.8-1 6.4l-6.3 6.3-5.4-5.4z" fill="currentColor"/><path d="m5.6 12.4 6 6-1.8 1.8-6-6z" fill="currentColor"/></svg><span>Bullet</span></span>
+                  <div class="tc-row" role="radiogroup" aria-labelledby="tcBullet">
+                    <label class="tc"><input type="radio" name="timeControl" value="1"><span>1 min</span></label>
+                    <label class="tc"><input type="radio" name="timeControl" value="1+1"><span>1 | 1</span></label>
+                    <label class="tc"><input type="radio" name="timeControl" value="2+1"><span>2 | 1</span></label>
+                  </div>
+                </div>
+                <div class="tc-group">
+                  <span class="tc-kind tc-blitz" id="tcBlitz"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 2 4.5 13.5h6.2L9.8 22l9.4-12.3H13z" fill="currentColor"/></svg><span>Blitz</span></span>
+                  <div class="tc-row" role="radiogroup" aria-labelledby="tcBlitz">
+                    <label class="tc"><input type="radio" name="timeControl" value="3"><span>3 min</span></label>
+                    <label class="tc"><input type="radio" name="timeControl" value="3+2"><span>3 | 2</span></label>
+                    <label class="tc"><input type="radio" name="timeControl" value="5"><span>5 min</span></label>
+                  </div>
+                </div>
+                <div class="tc-group">
+                  <span class="tc-kind tc-rapid" id="tcRapid"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4.5l3 2M9.5 2.5h5"/></svg><span>Rapid</span></span>
+                  <div class="tc-row" role="radiogroup" aria-labelledby="tcRapid">
+                    <label class="tc"><input type="radio" name="timeControl" value="10"><span>10 min</span></label>
+                    <label class="tc"><input type="radio" name="timeControl" value="15+10"><span>15 | 10</span></label>
+                    <label class="tc"><input type="radio" name="timeControl" value="30"><span>30 min</span></label>
+                  </div>
+                </div>
+                <div class="tc-row tc-row-wide" role="radiogroup" aria-label="No limit">
+                  <label class="tc"><input type="radio" name="timeControl" value="none" checked><span>No limit</span></label>
+                </div>
+              </div>
+              <p class="block-help time-help" id="timeHelp">With no limit, the clocks count how long each side thinks. The coach's checks never use your time.</p>
+            </fieldset>
+            <fieldset class="play-as" id="playAsBlock">
               <legend class="block-title font-display">Play as</legend>
               <div class="segmented" role="radiogroup" aria-label="Play as">
                 <label><input type="radio" name="playAs" value="w" checked><span>White</span></label>
@@ -449,18 +518,20 @@
                 <label><input type="radio" name="playAs" value="b"><span>Black</span></label>
               </div>
             </fieldset>
-            <fieldset class="play-as">
-              <legend class="block-title font-display">Time</legend>
-              <div class="segmented segmented-4" role="radiogroup" aria-label="Time" aria-describedby="timeHelp">
-                <label><input type="radio" name="timeControl" value="none" checked><span>No limit</span></label>
-                <label><input type="radio" name="timeControl" value="15+10"><span>15 | 10</span></label>
-                <label><input type="radio" name="timeControl" value="10"><span>10 min</span></label>
-                <label><input type="radio" name="timeControl" value="5"><span>5 min</span></label>
+            <div class="bot-block" id="botBlock">
+              <h2 class="block-title font-display">Choose a bot</h2>
+              <div class="menu-list" id="levelCards"></div>
+            </div>
+            <div class="friend-block" id="friendBlock" hidden>
+              <div class="setting">
+                <div class="setting-text">
+                  <span class="setting-name" id="flipLabel">Turn the board</span>
+                  <span class="setting-help" id="flipHelp">After each move, turn the board so the player to move has their pieces at the bottom.</span>
+                </div>
+                <button type="button" class="switch" id="flipToggle" role="switch" aria-checked="true" aria-labelledby="flipLabel" aria-describedby="flipHelp"><span class="switch-knob"></span></button>
               </div>
-              <p class="block-help time-help" id="timeHelp">With no limit, the clocks count how long each side thinks. The coach's checks never use your time.</p>
-            </fieldset>
-            <h2 class="block-title font-display">Choose a bot</h2>
-            <div class="menu-list" id="levelCards"></div>
+              <button type="button" class="btn btn-primary btn-big" id="btnFriendStart">Start game</button>
+            </div>
           </div>
 
           <!-- Settings pane -->
@@ -583,7 +654,7 @@
       <!-- ============================================================== -->
       <!-- Puzzles (Lichess puzzle database, public domain)                -->
       <!-- ============================================================== -->
-      <section id="view-puzzles" class="view view-grid" aria-label="Puzzles" hidden>
+      <section id="view-puzzles" class="view view-grid" aria-label="Puzzles" data-pzmode="rated" hidden>
         <div class="play-col">
           <div class="player-strip">
             <span class="avatar avatar-theme" id="pzAvatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h5a3 3 0 0 1 6 0h5v5a3 3 0 0 1 0 6v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
@@ -595,7 +666,7 @@
               <span class="strip-side" id="pzTask">Loading puzzles…</span>
             </div>
             <div class="pz-rating" title="Your puzzle rating goes up when you solve puzzles and down when you miss them.">
-              <span class="pz-rating-label">Rating</span>
+              <span class="pz-rating-label" id="pzRatingLabel">Rating</span>
               <span class="pz-rating-value font-display" id="pzRating">600</span>
             </div>
           </div>
@@ -610,8 +681,27 @@
             <h1 class="side-title font-display">Puzzles</h1>
           </header>
           <div class="side-body">
-            <div class="chip-row chip-row-wrap" id="pzThemes" role="radiogroup" aria-label="Puzzle type"></div>
-            <p class="pz-theme-help" id="pzThemeHelp"></p>
+            <div class="segmented pz-modes" role="radiogroup" aria-label="Puzzle mode">
+              <label><input type="radio" name="pzMode" value="rated" checked><span>Rated</span></label>
+              <label><input type="radio" name="pzMode" value="sprint"><span>Sprint</span></label>
+              <label><input type="radio" name="pzMode" value="survival"><span>Survival</span></label>
+            </div>
+
+            <div class="rush-card" id="rushIntro" hidden>
+              <h2 class="rush-title font-display" id="rushTitle">Puzzle Sprint</h2>
+              <p class="rush-text" id="rushText"></p>
+              <p class="rush-best" id="rushBest"></p>
+              <button type="button" class="btn btn-primary btn-big" id="btnRushStart">Start</button>
+            </div>
+
+            <div class="rush-board" id="rushBoard" hidden>
+              <div class="rush-stat"><span class="rush-num font-display" id="rushScore">0</span><span class="rush-label">Solved</span></div>
+              <div class="rush-stat" id="rushTimeWrap"><span class="rush-num font-display" id="rushTime">3:00</span><span class="rush-label">Time left</span></div>
+              <div class="rush-stat"><span class="rush-lives" id="rushLives" role="img" aria-label="0 of 3 mistakes"><i></i><i></i><i></i></span><span class="rush-label">Mistakes</span></div>
+            </div>
+
+            <div class="chip-row chip-row-wrap pz-rated-only" id="pzThemes" role="radiogroup" aria-label="Puzzle type"></div>
+            <p class="pz-theme-help pz-rated-only" id="pzThemeHelp"></p>
 
             <div class="status-card">
               <span class="status-dot" id="pzDot" data-kind="busy" aria-hidden="true"></span>
@@ -621,14 +711,14 @@
               </div>
             </div>
 
-            <div class="controls" role="toolbar" aria-label="Puzzle controls">
+            <div class="controls pz-rated-only" role="toolbar" aria-label="Puzzle controls">
               <button type="button" class="btn btn-ghost" id="btnPzHint">Show hint</button>
               <button type="button" class="btn btn-ghost" id="btnPzSolution">Show solution</button>
               <button type="button" class="btn btn-primary" id="btnPzNext">Next puzzle</button>
               <button type="button" class="btn btn-ghost" id="btnPzRetry" hidden>Try again</button>
             </div>
 
-            <div class="stat-row" aria-label="Your puzzle stats">
+            <div class="stat-row pz-rated-only" aria-label="Your puzzle stats">
               <div class="stat-mini"><span class="stat-mini-value font-display" id="pzSolvedToday">0</span><span class="stat-mini-label">Solved today</span></div>
               <div class="stat-mini"><span class="stat-mini-value font-display" id="pzStreak">0</span><span class="stat-mini-label">In a row</span></div>
               <div class="stat-mini"><span class="stat-mini-value font-display" id="pzSolvedTotal">0</span><span class="stat-mini-label">Solved in total</span></div>
@@ -762,7 +852,7 @@
       <span class="guard-eval-after" id="guardEvalAfter">−0.0</span>
     </p>
     <p class="guard-text" id="guardText"></p>
-    <p class="guard-note">The red square on the board shows the danger. This position is saved to My Blunder Bank so you can practice it later.</p>
+    <p class="guard-note" id="guardNote">The red square on the board shows the danger. This position is saved to My Blunder Bank so you can practice it later.</p>
     <div class="guard-actions">
       <button type="button" class="btn btn-primary" id="guardUndo">Undo &amp; Rethink</button>
       <button type="button" class="btn btn-ghost" id="guardPlay">Play Anyway</button>

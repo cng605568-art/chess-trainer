@@ -61,7 +61,7 @@ A sidebar on the left switches between **Home**, **Learn**, **Play**, **Puzzles*
 
 **Puzzles.** Beginner puzzles from real games on Lichess: checkmate in 1 and 2, free pieces, forks, pins, back-row mates and pawn promotion. The bot plays the first move, then you find the answer. Pick a type or mix them. Your puzzle rating starts at 600 and moves like a chess rating: up when you solve one, down when you miss it.
 
-**Daily practice.** Every game, puzzle and lesson step earns XP, and XP raises your level (Pawn up to King). Home shows today's goal (finish a game, solve 3 puzzles, do a lesson step), a puzzle of the day that is the same for everyone, your day streak, and 16 badges.
+**Daily practice.** Every game, puzzle and lesson step earns XP, and XP raises your level (Pawn up to King). Home shows today's goal (finish a game, solve 3 puzzles, do a lesson step), a puzzle of the day that is the same for everyone, your day streak, and 20 badges.
 
 **Try that moment again.** After a game, Key moments lists your biggest mistakes and the bot's slips. **Try again** starts a new game from just before your mistake, so you can find the better move. **Play from here** works from any position while you step through a game.
 
@@ -79,7 +79,20 @@ A sidebar on the left switches between **Home**, **Learn**, **Play**, **Puzzles*
 
 **My Blunder Bank.** Every blunder is saved (position + Stockfish's best move), whether the guard caught it or not. In the Blunder Bank tab you replay the position and look for a better move. Stockfish's move, or any move that keeps the position within 0.6 pawns of it, solves the puzzle and clears it from the queue.
 
-**Clocks.** Each player bar has a clock that turns white while that side is thinking. Pick a time limit under New game: **No limit** (the clocks count how long each side spends thinking), **15 | 10** (15 minutes plus 10 seconds after every move), **10 min** or **5 min**. Your clock stops while the coach checks your move and while the Coach Guard banner is open, so the coach never costs you time. If a clock runs out, that side loses, unless the other side has only a king, or a king and one bishop or knight, which makes it a draw. The bot speeds up when it's short on time.
+**Clocks.** Each player bar has a clock that turns white while that side is thinking. Pick a time limit under New game: **Bullet** (1 min, 1 | 1, 2 | 1), **Blitz** (3 min, 3 | 2, 5 min), **Rapid** (10 min, 15 | 10, 30 min) or **No limit** (the clocks count how long each side spends thinking). "3 | 2" means 3 minutes each plus 2 seconds after every move. Your clock stops while the coach checks your move and while the Coach Guard banner is open, so the coach never costs you time. If a clock runs out, that side loses, unless the other side has only a king, or a king and one bishop or knight, which makes it a draw. The bot speeds up when it's short on time.
+
+**Premoves.** While the bot is thinking you can already make your next move. It shows in red on the board and plays the moment the bot has moved, if it is still legal. Tap an empty square (or right-click) to cancel it. Handy in Bullet.
+
+**Game modes.** Under New game (or the Ways to play tiles on Home):
+- **Standard**: normal chess against a bot.
+- **Head start**: the bot starts without its queen, a rook or a knight.
+- **King of the Hill**: checkmate wins, and so does getting your king to one of the four centre squares (outlined on the board). The bot plays normal chess, but it always takes a winning king move and never lets you reach the centre in one move. Coach Guard warns before a move that lets the bot's king reach the centre.
+- **Three-check**: checkmate wins, and so does giving three checks. Dots next to each name count them. The bot gives the third check when it can and avoids allowing yours.
+- **Play a friend**: two people on one device. The board turns after each move (switch it off under New game), the clocks run for both, and Take back undoes one move. No coach or Blunder Bank in these games.
+
+Blunders in King of the Hill and Three-check games aren't saved to the Blunder Bank, since its puzzles are normal chess.
+
+**Puzzle Sprint and Survival.** In Puzzles, **Sprint** gives you 3 minutes to solve as many puzzles as you can, and **Survival** has no clock. Both start easy and get harder, and three wrong moves end the run. Your best scores are saved.
 
 **Step buttons.** Under the panel: jump to the start, step back, play through the moves (press again to pause), step forward, and return to the live position. From the live position, the play button replays the whole game from move 1.
 
