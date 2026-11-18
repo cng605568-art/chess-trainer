@@ -221,6 +221,23 @@
               <p class="home-note" id="homeNote"></p>
             </section>
 
+            <section class="home-card ladder-card" aria-labelledby="ladderTitle">
+              <div class="today-head">
+                <h2 class="home-card-title font-display" id="ladderTitle">Bot ladder</h2>
+                <span class="today-reward" id="ladderTotal">0 of 18 ★</span>
+              </div>
+              <ol class="ladder" id="ladderRungs" aria-label="Stars against each bot"></ol>
+              <ul class="ladder-rules">
+                <li><span class="lr-stars" aria-hidden="true">★</span><span>Win</span></li>
+                <li><span class="lr-stars" aria-hidden="true">★★</span><span>Win with no big mistakes</span></li>
+                <li><span class="lr-stars" aria-hidden="true">★★★</span><span>Also no hints or take-backs</span></li>
+              </ul>
+              <div class="ladder-foot">
+                <p class="ladder-next" id="ladderNext"></p>
+                <button type="button" class="btn btn-primary" id="btnLadderGo">Play</button>
+              </div>
+            </section>
+
             <section class="home-card ways-card" aria-labelledby="waysTitle">
               <h2 class="home-card-title font-display" id="waysTitle">Ways to play</h2>
               <div class="ways-grid">

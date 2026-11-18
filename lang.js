@@ -996,5 +996,20 @@ I18N.addRows([
   ["Your device has no voice for this language, so another voice may read it, or it may stay silent. You can add voices in your phone's settings.", "Peranti anda tiada suara untuk bahasa ini, jadi suara lain mungkin membacanya, atau ia mungkin senyap. Anda boleh menambah suara dalam tetapan telefon anda.", "你的设备没有这种语言的语音，可能会用别的语音朗读，也可能没有声音。你可以在手机设置里添加语音。"],
   ["The coach's notes, warnings and lesson steps are read out loud with your device's voice.", "Nota, amaran dan langkah pelajaran jurulatih dibaca dengan kuat menggunakan suara peranti anda.", "用你设备的语音朗读教练的点评、提醒和课程步骤。"],
   ["I'll read my notes out loud.", "Saya akan membaca nota saya dengan kuat.", "我会把点评读出来。"],
-  ["Read the coach aloud", "Jurulatih membaca dengan kuat", "朗读教练点评"]
+  ["Read the coach aloud", "Jurulatih membaca dengan kuat", "朗读教练点评"],
+  ["{stars} against {bot}", "{stars} melawan {bot}", "对{bot}：{stars}"],
+  ["Perfect: a win with no big mistakes and no help.", "Sempurna: menang tanpa kesilapan besar dan tanpa bantuan.", "完美：没有大错、没有帮助地赢了。"],
+  ["A win with no big mistakes. Win without hints or take-backs for the third star.", "Menang tanpa kesilapan besar. Menang tanpa petunjuk atau tarik balik untuk bintang ketiga.", "没有大错地赢了。不用提示、不悔棋再赢一次，就能拿到第三颗星。"],
+  ["A win! Win with no big mistakes for the second star.", "Menang! Menang tanpa kesilapan besar untuk bintang kedua.", "赢了！没有大错地赢一次，就能拿到第二颗星。"],
+  ["Bot ladder: {stars} against {bot}.", "Tangga bot: {stars} melawan {bot}.", "电脑阶梯：对{bot}获得{stars}。"],
+  ["{n} of 3 stars", "{n} daripada 3 bintang", "{n} / 3 颗星"],
+  ["{bot}: {n} of 3 stars", "{bot}: {n} daripada 3 bintang", "{bot}：{n} / 3 颗星"],
+  ["Next: beat {bot}.", "Seterusnya: kalahkan {bot}.", "下一步：打败{bot}。"],
+  ["Next: get 3 stars against {bot}.", "Seterusnya: dapatkan 3 bintang melawan {bot}.", "下一步：对{bot}拿到3颗星。"],
+  ["You have every star. You beat the whole ladder!", "Anda ada semua bintang. Anda menamatkan seluruh tangga!", "你拿到了所有星星，通关了整个阶梯！"],
+  ["Bot ladder", "Tangga bot", "电脑阶梯"],
+  ["0 of 18 ★", "0 daripada 18 ★", "0 / 18 ★"],
+  ["Win with no big mistakes", "Menang tanpa kesilapan besar", "没有大错地赢"],
+  ["Also no hints or take-backs", "Juga tanpa petunjuk atau tarik balik", "而且不用提示、不悔棋"],
+  ["Stars against each bot", "Bintang melawan setiap bot", "对每个电脑获得的星星"]
 ]);

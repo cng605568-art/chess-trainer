@@ -1428,6 +1428,7 @@
     premove: null, // { from, to } queued while the bot thinks
     variantNote: '',
     voiceOn: false,
+    helped: false, // hints, take-backs or Coach Guard saves this game (bot ladder)
     liveEval: null,
     summaryStartPly: 0,
     review: { quality: {}, evals: {}, saves: 0 }
@@ -1662,6 +1663,8 @@
       mode: S.mode,
       odds: S.odds || '',
       checkBase: S.checkBase,
+      helped: S.helped,
+      level: S.levelIndex,
       gameId: S.gameId,
       clock: { base: Clock.base, inc: Clock.inc, w: Math.round(Clock.value('w')), b: Math.round(Clock.value('b')) },
       savedAt: stamp
@@ -2169,6 +2172,8 @@
     S.checkBase = opts.checkBase || { w: 0, b: 0 };
     S.premove = null;
     S.variantNote = '';
+    S.helped = false;
+    S.lastStars = 0;
     if (S.mode === 'friend') S.playerColor = opts.color || 'w';
     else S.playerColor = opts.color || (S.colorChoice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : S.colorChoice);
     S.startFen = opts.fen || (S.mode === 'odds' ? oddsFen(S.playerColor, S.odds) : null);
@@ -2329,6 +2334,8 @@
     S.checkBase = cb ? { w: +cb.w || 0, b: +cb.b || 0 } : { w: 0, b: 0 };
     S.premove = null;
     S.variantNote = '';
+    S.helped = !!data.helped;
+    if (typeof data.level === 'number' && LEVELS[data.level]) S.levelIndex = data.level;
     if (ChessAPI.isGameOver(g) || variantTerm(g)) {
       S.mode = 'standard';
       return false;
@@ -2515,6 +2522,7 @@
       board.setArrows([]);
       if (vChoice === 'undo') {
         S.game.undo();
+        S.helped = true;
         S.review.saves++;
         var vStats = loadStats();
         vStats.saves++;
@@ -2577,6 +2585,7 @@
         board.setArrows([]);
         if (choice === 'undo') {
           S.game.undo();
+          S.helped = true;
           S.review.saves++;
           var savedStats = loadStats();
           savedStats.saves++;
@@ -2845,6 +2854,18 @@
       blunders: isFriend() ? null : Object.keys(S.review.quality).filter(function (k) { return S.review.quality[k].cls === 'blunder'; }).length,
       moves: Math.ceil(S.game.history().length / 2)
     });
+    var blunderCount = Object.keys(S.review.quality).filter(function (k) { return S.review.quality[k].cls === 'blunder'; }).length;
+    var stars = isFriend() ? 0 : ladderStars(outcome.result, blunderCount);
+    S.lastStars = stars;
+    if (stars && Progress.data) {
+      var before = Progress.data.ladder[S.levelIndex] || 0;
+      if (stars > before) {
+        Progress.data.ladder[S.levelIndex] = stars;
+        Progress.save();
+        renderLevelCards();
+        toast('★', T('{stars} against {bot}', { stars: starText(stars), bot: botName(S.levelIndex) }), stars === 3 ? T('Perfect: a win with no big mistakes and no help.') : stars === 2 ? T('A win with no big mistakes. Win without hints or take-backs for the third star.') : T('A win! Win with no big mistakes for the second star.'));
+      }
+    }
     if (isFriend()) {
       pushNotes([{ tone: 'tip', icon: '♔', text: T('Good game! Step back through the moves together to see where it turned.') }], T('Game over'));
       showSummary(term);
@@ -2881,6 +2902,7 @@
       return;
     }
     if (!hist.some(function (m) { return m.color === S.playerColor; })) return;
+    S.helped = true;
     cancelEngineWork();
     S.epoch++;
     Clock.pause();
@@ -2907,6 +2929,7 @@
 
   async function showHint() {
     if (S.phase !== 'player') return;
+    S.helped = true;
     if (S.viewPly !== null) exitView(false);
     var fen = S.game.fen();
     var epoch = S.epoch;
@@ -3063,6 +3086,7 @@
       lines.push(T("This game has no move ratings, because the computer coach wasn't running or the page was reloaded during the game."));
     }
     if (S.review.saves) lines.push(S.review.saves === 1 ? T('Coach Guard saved you 1 time.') : T('Coach Guard saved you {n} times.', { n: S.review.saves }));
+    if (S.lastStars) lines.push(T('Bot ladder: {stars} against {bot}.', { stars: starText(S.lastStars), bot: botName(S.levelIndex) }));
     ui.summaryLine.textContent = C.joinSentences(lines);
     drawEvalGraph(hist.length);
     ui.btnSummaryBank.hidden = S.bankedThisGame === 0;
@@ -3502,6 +3526,14 @@
       var sub = document.createElement('span');
       sub.className = 'menu-sub';
       sub.textContent = levelBlurb(i);
+      if (Progress.data) {
+        var stars = document.createElement('span');
+        var n = Progress.data.ladder[i] || 0;
+        stars.className = 'menu-stars' + (n ? ' has-stars' : '');
+        stars.textContent = starText(n);
+        stars.setAttribute('aria-label', T('{n} of 3 stars', { n: n }));
+        title.appendChild(stars);
+      }
       text.appendChild(title);
       text.appendChild(sub);
       card.appendChild(icon);
@@ -3935,7 +3967,8 @@
         days: d.days && typeof d.days === 'object' ? d.days : {},
         streak: d.streak && typeof d.streak === 'object' ? { count: parseInt(d.streak.count, 10) || 0, best: parseInt(d.streak.best, 10) || 0, last: String(d.streak.last || '') } : { count: 0, best: 0, last: '' },
         badges: d.badges && typeof d.badges === 'object' ? d.badges : {},
-        daily: d.daily && typeof d.daily === 'object' ? d.daily : {}
+        daily: d.daily && typeof d.daily === 'object' ? d.daily : {},
+        ladder: LEVELS.map(function (l, i) { return Array.isArray(d.ladder) ? Math.max(0, Math.min(3, parseInt(d.ladder[i], 10) || 0)) : 0; })
       };
     },
 
@@ -4065,6 +4098,71 @@
       if (!ui.viewHome.hidden) renderHome();
     }
   };
+
+  /* ---------------------------------------------------------------- bot ladder */
+
+  /** Stars for a finished game: win; and no big mistakes; and no help. 0 if it doesn't count. */
+  function ladderStars(result, blunders) {
+    if (result !== 'win' || S.mode !== 'standard' || S.startFen) return 0;
+    if (blunders > 0) return 1;
+    return S.helped ? 2 : 3;
+  }
+
+  function starText(n) {
+    var out = '';
+    for (var i = 0; i < 3; i++) out += i < n ? '★' : '☆';
+    return out;
+  }
+
+  /** The next rung to aim for: the first bot not beaten yet, else the first without 3 stars. */
+  function ladderNext() {
+    var l = Progress.data.ladder;
+    for (var i = 0; i < l.length; i++) if (!l[i]) return { level: i, goal: 'win' };
+    for (var j = 0; j < l.length; j++) if (l[j] < 3) return { level: j, goal: 'three' };
+    return null;
+  }
+
+  function renderLadder() {
+    var wrap = $('ladderRungs');
+    if (!wrap || !Progress.data) return;
+    var l = Progress.data.ladder;
+    var next = ladderNext();
+    wrap.innerHTML = '';
+    LEVELS.forEach(function (lvl, i) {
+      var li = document.createElement('li');
+      li.className = 'rung' + (l[i] ? ' is-beaten' : '') + (l[i] === 3 ? ' is-perfect' : '') + (next && next.level === i ? ' is-next' : '');
+      li.setAttribute('aria-label', T('{bot}: {n} of 3 stars', { bot: levelName(i), n: l[i] }));
+      var g = document.createElement('span');
+      g.className = 'rung-glyph';
+      g.dataset.level = String(i);
+      g.setAttribute('aria-hidden', 'true');
+      g.textContent = lvl.glyph;
+      var name = document.createElement('span');
+      name.className = 'rung-name';
+      name.textContent = levelName(i);
+      var st = document.createElement('span');
+      st.className = 'rung-stars';
+      st.setAttribute('aria-hidden', 'true');
+      st.textContent = starText(l[i]);
+      li.appendChild(g);
+      li.appendChild(name);
+      li.appendChild(st);
+      wrap.appendChild(li);
+    });
+    var total = l.reduce(function (a, b) { return a + b; }, 0);
+    $('ladderTotal').textContent = T('{have} of {need}', { have: total, need: l.length * 3 }) + ' ★';
+    var btn = $('btnLadderGo');
+    if (next) {
+      $('ladderNext').textContent = next.goal === 'win'
+        ? T('Next: beat {bot}.', { bot: botName(next.level) })
+        : T('Next: get 3 stars against {bot}.', { bot: botName(next.level) });
+      btn.hidden = false;
+      btn.dataset.level = String(next.level);
+    } else {
+      $('ladderNext').textContent = T('You have every star. You beat the whole ladder!');
+      btn.hidden = true;
+    }
+  }
 
   function onProgress(type, info) {
     if (Progress.data) Progress.event(type, info);
@@ -5580,6 +5678,7 @@
     for (var i = 0, list = games.filter(function (g) { return g.mode !== 'friend'; }); i < list.length && list[i].blunders === 0; i++) clean++;
     ui.statClean.textContent = String(clean);
     renderProgressHome();
+    renderLadder();
 
     renderLevelChips();
     var colour = S.colorChoice === 'random' ? T('a random colour') : C.colorName(S.colorChoice === 'b' ? 'b' : 'w');
@@ -6368,6 +6467,16 @@
       goToPlay('game');
     });
     ui.btnHomeContinue.addEventListener('click', function () { goToPlay('game'); });
+    $('btnLadderGo').addEventListener('click', function () {
+      if (S.phase === 'warning' || S.phase === 'promoting') return;
+      if (S.started && S.phase !== 'over' && S.game.history().length && !window.confirm(T('Start a new game? Your current game will end.'))) return;
+      S.levelIndex = parseInt($('btnLadderGo').dataset.level, 10) || 0;
+      S.homeLevel = S.levelIndex;
+      saveSettings();
+      renderLevelCards();
+      newGame({ mode: 'standard' });
+      goToPlay('game');
+    });
     Array.prototype.forEach.call(ui.viewHome.querySelectorAll('[data-go]'), function (btn) {
       btn.addEventListener('click', function () {
         var go = btn.dataset.go;

@@ -4308,3 +4308,103 @@ html[lang^="zh"] body {
   justify-content: space-between;
   gap: 10px;
 }
+
+/* Bot ladder */
+.ladder {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rung {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 2px;
+  border-radius: var(--radius-control);
+  background: #2a2a2a;
+  text-align: center;
+}
+
+.rung.is-next {
+  box-shadow: inset 0 0 0 2px var(--silver);
+}
+
+.rung-glyph {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.rung-glyph[data-level="0"] { background: #e4e4e4; color: #2a2a2a; }
+.rung-glyph[data-level="1"] { background: #c4c4c4; color: #222; }
+.rung-glyph[data-level="2"] { background: #9e9e9e; color: #1a1a1a; }
+.rung-glyph[data-level="3"] { background: #747474; color: #f4f4f4; }
+.rung-glyph[data-level="4"] { background: #525252; color: #f4f4f4; }
+.rung-glyph[data-level="5"] { background: #1a1a1a; color: #f4f4f4; box-shadow: inset 0 0 0 2px #6a6a6a; }
+
+.rung-name {
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.rung-stars,
+.menu-stars,
+.lr-stars {
+  color: #5f5f5f;
+  font-size: 0.86rem;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.rung.is-beaten .rung-stars,
+.menu-stars.has-stars,
+.lr-stars {
+  color: #f2c94c;
+}
+
+.menu-stars {
+  margin-left: 8px;
+  font-size: 0.8rem;
+}
+
+.ladder-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.ladder-rules li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ladder-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.ladder-next {
+  margin: 0;
+  font-weight: 700;
+}
