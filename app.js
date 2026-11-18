@@ -35,6 +35,17 @@
   var ANALYSIS = { depth: 12, movetime: 900 };
   var PUZZLE_ANALYSIS = { depth: 12, movetime: 900 };
   var MIN_BOT_THINK_MS = 450;
+
+  // Clocks. A base of 0 means "no limit": the clocks count up instead of down.
+  var TIME_CONTROLS = {
+    none: { base: 0, inc: 0, phrase: 'no time limit' },
+    '15+10': { base: 15 * 60000, inc: 10000, phrase: '15 minutes each plus 10 seconds a move' },
+    '10': { base: 10 * 60000, inc: 0, phrase: '10 minutes each' },
+    '5': { base: 5 * 60000, inc: 0, phrase: '5 minutes each' }
+  };
+  var LOW_TIME_MS = 20000;
+  var AUTOPLAY_MS = 900;
+  var PAWN_AVATAR = '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6.5a5.6 5.6 0 0 0-3.5 10c-2.2 1.2-3.6 3.1-3.6 5.4 0 .6.5 1.1 1.1 1.1h2c-.4 3.5-1.9 6.2-4.7 8.1-.7.4-1 1.1-1 1.8v1.6h19.4v-1.6c0-.7-.3-1.4-1-1.8-2.8-1.9-4.3-4.6-4.7-8.1h2c.6 0 1.1-.5 1.1-1.1 0-2.3-1.4-4.2-3.6-5.4A5.6 5.6 0 0 0 20 6.5z" fill="currentColor"/></svg>';
   var SETTINGS_KEY = 'chessTrainer.settings.v1';
   var GAME_KEY = 'chessTrainer.game.v1';
   var HISTORY_KEY = 'chessTrainer.history.v1';
@@ -1147,6 +1158,7 @@
         document.body.classList.remove('modal-open');
         modal.removeEventListener('click', onClick);
         document.removeEventListener('keydown', onKey, true);
+        S.closePromotion = null;
         if (prevFocus && prevFocus.focus) prevFocus.focus({ preventScroll: true });
         resolve(value);
       }
@@ -1167,6 +1179,7 @@
       }
       modal.addEventListener('click', onClick);
       document.addEventListener('keydown', onKey, true);
+      S.closePromotion = function () { done(null); };
       setTimeout(function () { if (buttons[0]) buttons[0].focus(); }, 30);
     });
   }
@@ -1248,6 +1261,9 @@
     engineNoticeShown: false,
     engineNotice: null,
     soundOn: true,
+    timeChoice: 'none',
+    closePromotion: null,
+    lastSaveStamp: 0,
     boardTheme: 'green',
     homeLevel: 2,
     boardThemeChosen: false,
@@ -1275,6 +1291,7 @@
       if (typeof s.levelIndex === 'number' && s.levelIndex >= 0 && s.levelIndex < LEVELS.length) S.levelIndex = s.levelIndex;
       if (s.colorChoice === 'w' || s.colorChoice === 'b' || s.colorChoice === 'random') S.colorChoice = s.colorChoice;
       if (typeof s.soundOn === 'boolean') S.soundOn = s.soundOn;
+      if (typeof s.timeChoice === 'string' && Object.prototype.hasOwnProperty.call(TIME_CONTROLS, s.timeChoice)) S.timeChoice = s.timeChoice;
       if (s.boardThemeChosen === true && (s.boardTheme === 'grey' || s.boardTheme === 'green' || s.boardTheme === 'brown')) {
         S.boardTheme = s.boardTheme;
         S.boardThemeChosen = true;
@@ -1291,6 +1308,7 @@
       levelIndex: S.levelIndex,
       colorChoice: S.colorChoice,
       soundOn: S.soundOn,
+      timeChoice: S.timeChoice,
       boardTheme: S.boardTheme,
       boardThemeChosen: S.boardThemeChosen
     }));
@@ -1301,8 +1319,166 @@
       store.remove(GAME_KEY);
       return;
     }
+    if (!S.started) return;
     var moves = S.game.history({ verbose: true }).map(moveToUci);
-    store.set(GAME_KEY, JSON.stringify({ v: 1, moves: moves, playerColor: S.playerColor, gameId: S.gameId, savedAt: Date.now() }));
+    var stamp = Date.now();
+    if (stamp <= S.lastSaveStamp) stamp = S.lastSaveStamp + 1;
+    S.lastSaveStamp = stamp;
+    store.set(GAME_KEY, JSON.stringify({
+      v: 1,
+      moves: moves,
+      playerColor: S.playerColor,
+      gameId: S.gameId,
+      clock: { base: Clock.base, inc: Clock.inc, w: Math.round(Clock.value('w')), b: Math.round(Clock.value('b')) },
+      savedAt: stamp
+    }));
+  }
+
+  /** True when the saved game is still the one this tab wrote last (no other tab has saved since). */
+  function ownsSavedGame() {
+    var data = readJSON(GAME_KEY, null);
+    return !!data && data.gameId === S.gameId && data.savedAt === S.lastSaveStamp;
+  }
+
+  /* ======================================================================== */
+  /* Clocks                                                                   */
+  /* ======================================================================== */
+
+  function clockNow() {
+    return window.performance && performance.now ? performance.now() : Date.now();
+  }
+
+  function pad2(n) {
+    return (n < 10 ? '0' : '') + n;
+  }
+
+  /** 7:51, 1:02:03, and tenths of a second under ten seconds on a countdown. */
+  function formatClock(ms, countdown) {
+    ms = Math.max(0, ms);
+    if (countdown && ms < 10000) {
+      return '0:' + pad2(Math.floor(ms / 1000)) + '.' + Math.floor((ms % 1000) / 100);
+    }
+    var total = Math.floor(ms / 1000);
+    var h = Math.floor(total / 3600);
+    var m = Math.floor((total % 3600) / 60);
+    var s = total % 60;
+    return h ? h + ':' + pad2(m) + ':' + pad2(s) : m + ':' + pad2(s);
+  }
+
+  var Clock = {
+    base: 0, // starting time per side in ms; 0 = no limit, count up
+    inc: 0, // added after each move, in ms
+    ms: { w: 0, b: 0 }, // time left (countdown) or time used (count up), excluding the running stretch
+    side: null, // colour whose clock is running
+    since: 0,
+    timer: null,
+    flagged: null,
+
+    reset: function (base, inc) {
+      this.stopTimer();
+      this.base = base || 0;
+      this.inc = inc || 0;
+      this.ms = { w: this.base, b: this.base };
+      this.side = null;
+      this.flagged = null;
+      renderClocks();
+    },
+
+    countdown: function () {
+      return this.base > 0;
+    },
+
+    value: function (c) {
+      var v = this.ms[c];
+      if (this.side === c) {
+        var d = clockNow() - this.since;
+        v = this.countdown() ? v - d : v + d;
+      }
+      return Math.max(0, v);
+    },
+
+    run: function (c) {
+      if (this.flagged || !S.started || S.phase === 'over') return;
+      if (this.side === c) return;
+      this.pause();
+      this.side = c;
+      this.since = clockNow();
+      var self = this;
+      this.timer = setInterval(function () { self.tick(); }, 100);
+      renderClocks();
+    },
+
+    pause: function () {
+      if (this.side) {
+        this.ms[this.side] = this.value(this.side);
+        this.side = null;
+      }
+      this.stopTimer();
+      renderClocks();
+    },
+
+    stopTimer: function () {
+      if (this.timer) clearInterval(this.timer);
+      this.timer = null;
+    },
+
+    addIncrement: function (c) {
+      if (this.countdown() && this.inc) this.ms[c] += this.inc;
+    },
+
+    tick: function () {
+      renderClocks();
+      if (this.countdown() && this.side && this.value(this.side) <= 0) onFlag(this.side);
+    }
+  };
+
+  function renderClocks() {
+    if (!ui.topClock) return;
+    var topColor = C.opposite(S.orientation);
+    [[ui.topClock, ui.topClockTime, topColor], [ui.bottomClock, ui.bottomClockTime, S.orientation]].forEach(function (row) {
+      var el = row[0];
+      var c = row[2];
+      var v = Clock.value(c);
+      var countdown = Clock.countdown();
+      var text = formatClock(v, countdown);
+      if (row[1].textContent !== text) row[1].textContent = text;
+      el.classList.toggle('is-running', Clock.side === c);
+      el.classList.toggle('is-low', countdown && v < LOW_TIME_MS && Clock.flagged !== c);
+      el.classList.toggle('is-flagged', Clock.flagged === c);
+      el.classList.toggle('is-countup', !countdown);
+    });
+  }
+
+  /** True when this side has only a king, or a king and one bishop or knight. */
+  function cannotMate(game, color) {
+    var minors = 0;
+    var board = C.parseFen(game.fen()).board;
+    for (var i = 0; i < 64; i++) {
+      var p = board[i];
+      if (!p || p.c !== color || p.t === 'k') continue;
+      if (p.t === 'b' || p.t === 'n') minors++;
+      else return false;
+    }
+    return minors <= 1;
+  }
+
+  /** A clock reached zero: the game ends on time. */
+  function onFlag(color) {
+    if (!S.started || S.phase === 'over') {
+      Clock.pause();
+      return;
+    }
+    Clock.ms[color] = 0;
+    Clock.flagged = color;
+    Clock.pause();
+    if (S.closeGuard) S.closeGuard();
+    if (S.closePromotion) S.closePromotion();
+    cancelEngineWork();
+    S.epoch++;
+    if (S.viewPly !== null) exitView(false);
+    board.clearSelection();
+    board.setArrows([]);
+    endGame('timeout');
   }
 
   function readJSON(key, fallback) {
@@ -1334,9 +1510,8 @@
     store.set(STATS_KEY, JSON.stringify(st));
   }
 
-  function recordGame(term, playerWon) {
+  function recordGame(term, result) {
     var blunders = Object.keys(S.review.quality).filter(function (k) { return S.review.quality[k].cls === 'blunder'; }).length;
-    var result = term === 'checkmate' ? (playerWon ? 'win' : 'loss') : 'draw';
     var list = loadHistory();
     list.unshift({
       at: Date.now(),
@@ -1450,6 +1625,7 @@
     var hist = S.game.history({ verbose: true });
     var ol = ui.moveList;
     ol.innerHTML = '';
+    renderNav();
     if (!hist.length) {
       var empty = document.createElement('li');
       empty.className = 'movelist-empty';
@@ -1503,25 +1679,36 @@
     var topColor = C.opposite(S.orientation);
     var bottomColor = S.orientation;
     var lvl = LEVELS[S.levelIndex];
-    function fill(color, nameEl, sideEl, capsEl, advEl, avatarEl) {
+    function fill(color, nameEl, sideEl, capsEl, advEl, avatarEl, clockEl) {
       var isMe = color === S.playerColor;
       if (S.started) {
         nameEl.textContent = isMe ? 'You' : lvl.name + ' bot';
-        sideEl.textContent = C.COLOR_NAMES[color];
+        sideEl.textContent = '(' + C.COLOR_NAMES[color] + ')';
       } else {
         nameEl.textContent = isMe ? 'You' : 'Opponent';
         sideEl.textContent = '';
       }
-      avatarEl.textContent = isMe ? '♔' : (S.started ? lvl.glyph : '?');
-      avatarEl.classList.toggle('avatar-you', isMe);
+      if (isMe) {
+        if (!avatarEl.classList.contains('avatar-pawn')) avatarEl.innerHTML = PAWN_AVATAR;
+        avatarEl.classList.add('avatar-pawn');
+        delete avatarEl.dataset.level;
+      } else {
+        avatarEl.classList.remove('avatar-pawn');
+        avatarEl.textContent = S.started ? lvl.glyph : '?';
+        if (S.started) avatarEl.dataset.level = String(S.levelIndex);
+        else delete avatarEl.dataset.level;
+      }
       capsEl.innerHTML = '';
       var list = color === 'w' ? caps.byWhite : caps.byBlack;
       list.forEach(function (t) { capsEl.appendChild(createPieceEl({ t: t, c: C.opposite(color) }, 'cap')); });
       var diff = color === 'w' ? caps.diff : -caps.diff;
       advEl.textContent = diff > 0 ? '+' + diff : '';
+      var who = isMe ? 'Your' : (S.started ? 'The ' + lvl.name + " bot's" : "Opponent's");
+      clockEl.setAttribute('aria-label', who + (Clock.countdown() ? ' clock, time left' : ' clock, time used'));
     }
-    fill(topColor, ui.topName, ui.topSide, ui.topCaps, ui.topAdv, ui.topAvatar);
-    fill(bottomColor, ui.bottomName, ui.bottomSide, ui.bottomCaps, ui.bottomAdv, ui.bottomAvatar);
+    fill(topColor, ui.topName, ui.topSide, ui.topCaps, ui.topAdv, ui.topAvatar, ui.topClock);
+    fill(bottomColor, ui.bottomName, ui.bottomSide, ui.bottomCaps, ui.bottomAdv, ui.bottomAvatar, ui.bottomClock);
+    renderClocks();
   }
 
   function lastMoveMark() {
@@ -1540,7 +1727,7 @@
 
   function refreshControls() {
     var hasMine = S.game.history({ verbose: true }).some(function (m) { return m.color === S.playerColor; });
-    ui.btnTakeBack.disabled = !hasMine || S.phase === 'warning' || S.phase === 'promoting';
+    ui.btnTakeBack.disabled = !hasMine || S.phase === 'warning' || S.phase === 'promoting' || (S.phase === 'over' && !!Clock.flagged);
     ui.btnHint.disabled = S.phase !== 'player' || engine.failed;
     ui.btnNewGame.disabled = S.phase === 'warning' || S.phase === 'promoting';
     board.refresh();
@@ -1571,11 +1758,14 @@
 
   function newGame() {
     if (S.closeGuard) S.closeGuard();
+    if (S.closePromotion) S.closePromotion();
     cancelEngineWork();
     S.epoch++;
     S.viewPly = null;
     renderReviewBar();
     hideSummary();
+    var tc = TIME_CONTROLS[S.timeChoice] || TIME_CONTROLS.none;
+    Clock.reset(tc.base, tc.inc);
     S.game = new window.Chess();
     S.gameId = makeId();
     S.playerColor = S.colorChoice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : S.colorChoice;
@@ -1622,8 +1812,18 @@
     S.playerColor = data.playerColor;
     S.orientation = data.playerColor;
     S.gameId = typeof data.gameId === 'string' ? data.gameId : makeId();
+    S.lastSaveStamp = typeof data.savedAt === 'number' ? data.savedAt : 0;
     S.viewPly = null;
     S.started = true;
+    var ck = data.clock;
+    var okNum = function (n) { return typeof n === 'number' && isFinite(n) && n >= 0; };
+    if (ck && okNum(ck.base) && okNum(ck.inc) && okNum(ck.w) && okNum(ck.b)) {
+      Clock.reset(ck.base, ck.inc);
+      // Never restore a countdown at zero: give at least ten seconds back.
+      Clock.ms = ck.base > 0 ? { w: Math.max(ck.w, 10000), b: Math.max(ck.b, 10000) } : { w: ck.w, b: ck.b };
+    } else {
+      Clock.reset(0, 0);
+    }
     resetReview();
     syncBoard(false);
     renderMoveList();
@@ -1640,6 +1840,7 @@
   function playerTurn(ctx) {
     S.phase = 'player';
     S.hintStage = 0;
+    Clock.run(S.playerColor);
     var fen = S.game.fen();
     var ply = S.game.history().length;
     var epoch = S.epoch;
@@ -1692,9 +1893,11 @@
     if (S.phase !== 'player' || S.viewPly !== null || S.game.turn() !== S.playerColor) return;
     var promotion = null;
     if (needsPromotion(S.game, from, to)) {
+      var promoEpoch = S.epoch;
       S.phase = 'promoting';
       refreshControls();
       promotion = await askPromotion(S.playerColor);
+      if (promoEpoch !== S.epoch) return; // the game ended (on time) while the picker was open
       S.phase = 'player';
       refreshControls();
       if (!promotion) return;
@@ -1705,6 +1908,8 @@
       board.refresh();
       return;
     }
+    // The coach's check below doesn't use anyone's time.
+    Clock.pause();
     var epoch = S.epoch;
     var fenAfter = S.game.fen();
     S.phase = 'checking';
@@ -1829,6 +2034,7 @@
       endGame(term);
       return;
     }
+    Clock.addIncrement(S.playerColor);
     saveGame();
     botTurn();
   }
@@ -1839,18 +2045,24 @@
     var epoch = S.epoch;
     var fen = S.game.fen();
     var lvl = LEVELS[S.levelIndex];
+    var botColor = oppColor();
+    Clock.run(botColor);
     setStatus(engine.ready || engine.failed ? lvl.name + ' bot is thinking…' : 'Waiting for the engine to load…', 'bot');
+    // Short on time, the bot moves faster, like a person would.
+    var botLeft = Clock.countdown() ? Clock.value(botColor) : Infinity;
+    var movetime = botLeft < 30000 ? Math.min(lvl.movetime, 150) : botLeft < 90000 ? Math.min(lvl.movetime, 400) : lvl.movetime;
+    var minThink = botLeft < 15000 ? 0 : MIN_BOT_THINK_MS;
     var t0 = Date.now();
     var uci = null;
     if (lvl.random > 0 && Math.random() < lvl.random) {
       uci = randomMoveUci(S.game);
     } else {
-      var r = await engine.search({ fen: fen, skill: lvl.skill, depth: lvl.depth, movetime: lvl.movetime });
+      var r = await engine.search({ fen: fen, skill: lvl.skill, depth: lvl.depth, movetime: movetime });
       if (epoch !== S.epoch) return;
       uci = r && r.bestMove;
     }
     if (!uci) uci = randomMoveUci(S.game);
-    var wait = MIN_BOT_THINK_MS - (Date.now() - t0);
+    var wait = minThink - (Date.now() - t0);
     if (wait > 0) await sleep(wait);
     if (epoch !== S.epoch) return;
 
@@ -1866,6 +2078,8 @@
       endGame(terminalInfo(S.game) || 'stalemate');
       return;
     }
+    Clock.pause();
+    Clock.addIncrement(botColor);
     var fenAfter = S.game.fen();
     board.setFen(fenAfter, { animate: true });
     board.setMarks({ lastMove: { from: mv.from, to: mv.to }, check: checkSquare(S.game), hint: [], danger: [] });
@@ -1899,27 +2113,53 @@
     playerTurn({ botMove: mv, prevEvalP: S.lastPlayerEvalP, label: label });
   }
 
+  /** Result of a finished game from the player's side: win, loss or draw, with the words for it. */
+  function gameOutcome(term) {
+    if (term === 'checkmate') {
+      var won = S.game.turn() !== S.playerColor;
+      return {
+        result: won ? 'win' : 'loss',
+        status: won ? 'Checkmate. You win!' : 'Checkmate. ' + oppName() + ' wins.',
+        summary: won ? 'You won by checkmate!' : oppName() + ' won by checkmate.'
+      };
+    }
+    if (term === 'timeout') {
+      var loser = Clock.flagged || S.playerColor;
+      var winner = C.opposite(loser);
+      var playerFlagged = loser === S.playerColor;
+      if (cannotMate(S.game, winner)) {
+        var who = playerFlagged ? 'the bot' : 'you';
+        return {
+          result: 'draw',
+          status: 'Draw. Time ran out, but ' + who + " can't checkmate with what's left.",
+          summary: 'Draw: time ran out, but ' + who + " had no way to checkmate."
+        };
+      }
+      return {
+        result: playerFlagged ? 'loss' : 'win',
+        status: playerFlagged ? 'You ran out of time. ' + oppName() + ' wins.' : 'The bot ran out of time. You win!',
+        summary: playerFlagged ? oppName() + ' won on time.' : 'You won on time!'
+      };
+    }
+    var reason = {
+      stalemate: ['Stalemate.', 'stalemate'],
+      repetition: ['Threefold repetition.', 'repetition'],
+      insufficient: ['Not enough material to checkmate.', 'insufficient material'],
+      fifty: ['50-move rule.', 'the 50-move rule']
+    }[term] || ['', 'agreement'];
+    return { result: 'draw', status: ('Draw. ' + reason[0]).trim(), summary: 'Draw by ' + reason[1] + '.' };
+  }
+
   function endGame(term) {
     S.phase = 'over';
+    Clock.pause();
     showPane('game');
     store.remove(GAME_KEY);
-    var text;
-    var playerWon = false;
-    if (term === 'checkmate') {
-      playerWon = S.game.turn() !== S.playerColor;
-      text = playerWon ? 'Checkmate. You win!' : 'Checkmate. ' + oppName() + ' wins.';
-    } else {
-      text = 'Draw. ' + ({
-        stalemate: 'Stalemate.',
-        repetition: 'Threefold repetition.',
-        insufficient: 'Not enough material to checkmate.',
-        fifty: '50-move rule.'
-      }[term] || '');
-    }
-    setStatus(text, 'over', 'Replay the game to see where it turned, or start a new one.');
+    var outcome = gameOutcome(term);
+    setStatus(outcome.status, 'over', 'Replay the game to see where it turned, or start a new one.');
     refreshControls();
-    Sound.play(term === 'checkmate' ? (playerWon ? 'win' : 'lose') : 'draw');
-    recordGame(term, playerWon);
+    Sound.play(outcome.result === 'win' ? 'win' : outcome.result === 'loss' ? 'lose' : 'draw');
+    recordGame(term, outcome.result);
     var summary = S.bankedThisGame > 0
       ? 'This game added ' + S.bankedThisGame + (S.bankedThisGame === 1 ? ' blunder' : ' blunders') + ' to My Blunder Bank. Solving them is the fastest way to stop repeating them.'
       : 'No new blunders saved this game. Nicely done.';
@@ -1929,10 +2169,12 @@
 
   function takeBack() {
     if (S.phase === 'warning' || S.phase === 'promoting') return;
+    if (S.phase === 'over' && Clock.flagged) return; // a game lost on time stays finished
     var hist = S.game.history({ verbose: true });
     if (!hist.some(function (m) { return m.color === S.playerColor; })) return;
     cancelEngineWork();
     S.epoch++;
+    Clock.pause();
     S.viewPly = null;
     renderReviewBar();
     hideSummary();
@@ -2046,6 +2288,8 @@
     var viewing = S.viewPly !== null;
     ui.reviewBar.hidden = !viewing;
     ui.boardWrap.classList.toggle('is-reviewing', viewing);
+    if (!viewing) stopAutoplay();
+    renderNav();
     if (!viewing) return;
     var hist = S.game.history({ verbose: true });
     if (S.viewPly === 0) {
@@ -2054,7 +2298,6 @@
       var m = hist[S.viewPly - 1];
       ui.reviewLabel.textContent = 'Move ' + Math.ceil(S.viewPly / 2) + (m.color === 'w' ? '. ' : '… ') + m.san;
     }
-    ui.btnPrev.disabled = S.viewPly === 0;
   }
 
   /* ======================================================================== */
@@ -2078,18 +2321,7 @@
       rated++;
       if (q.cls === 'blunder' && (firstBlunder === null || ply < firstBlunder)) firstBlunder = ply;
     });
-    var result;
-    if (term === 'checkmate') {
-      result = S.game.turn() === S.playerColor ? oppName() + ' won by checkmate.' : 'You won by checkmate!';
-    } else {
-      result = 'Draw by ' + ({
-        stalemate: 'stalemate',
-        repetition: 'repetition',
-        insufficient: 'insufficient material',
-        fifty: 'the 50-move rule'
-      }[term] || 'agreement') + '.';
-    }
-    ui.summaryResult.textContent = result;
+    ui.summaryResult.textContent = gameOutcome(term).summary;
     Array.prototype.forEach.call(ui.summaryPanel.querySelectorAll('[data-q]'), function (el) {
       el.textContent = String(counts[el.dataset.q] || 0);
     });
@@ -2153,6 +2385,64 @@
     renderStrips();
   }
 
+  /* ======================================================================== */
+  /* Step buttons under the panel: first, back, play through, forward, last   */
+  /* ======================================================================== */
+
+  var autoplayTimer = null;
+
+  function stopAutoplay() {
+    if (autoplayTimer) clearInterval(autoplayTimer);
+    autoplayTimer = null;
+    if (!ui.btnAutoplay) return;
+    ui.btnAutoplay.classList.remove('is-playing');
+    ui.btnAutoplay.setAttribute('aria-pressed', 'false');
+    ui.btnAutoplay.setAttribute('aria-label', 'Play through the moves');
+  }
+
+  function toggleAutoplay() {
+    if (autoplayTimer) {
+      stopAutoplay();
+      renderNav();
+      return;
+    }
+    if (!S.game.history().length || !canReview()) return;
+    // From the live position, play the whole game from the start.
+    if (S.viewPly === null) enterView(0);
+    if (S.viewPly === null) return;
+    autoplayTimer = setInterval(function () {
+      if (S.viewPly === null || !canReview()) {
+        stopAutoplay();
+        renderNav();
+        return;
+      }
+      enterView(S.viewPly + 1);
+      if (S.viewPly === null) stopAutoplay();
+      renderNav();
+    }, AUTOPLAY_MS);
+    ui.btnAutoplay.classList.add('is-playing');
+    ui.btnAutoplay.setAttribute('aria-pressed', 'true');
+    ui.btnAutoplay.setAttribute('aria-label', 'Pause');
+    renderNav();
+  }
+
+  function renderNav() {
+    if (!ui.btnFirst) return;
+    var len = S.game.history().length;
+    var cur = S.viewPly === null ? len : S.viewPly;
+    ui.btnFirst.disabled = cur === 0;
+    ui.btnPrev.disabled = cur === 0;
+    ui.btnNext.disabled = S.viewPly === null;
+    ui.btnLast.disabled = S.viewPly === null;
+    ui.btnAutoplay.disabled = !autoplayTimer && len === 0;
+  }
+
+  function stepTo(ply) {
+    stopAutoplay();
+    enterView(ply);
+    renderNav();
+  }
+
   /** Start screen: empty-handed board, bot cards open in the panel. */
   function showHome() {
     S.started = false;
@@ -2161,6 +2451,8 @@
     S.playerColor = S.colorChoice === 'b' ? 'b' : 'w';
     S.orientation = S.playerColor;
     S.viewPly = null;
+    var tc = TIME_CONTROLS[S.timeChoice] || TIME_CONTROLS.none;
+    Clock.reset(tc.base, tc.inc);
     resetReview();
     syncBoard(false);
     resetEval();
@@ -2652,7 +2944,8 @@
 
     renderLevelChips();
     var colour = { w: 'White', b: 'Black', random: 'a random colour' }[S.colorChoice] || 'White';
-    ui.homeNote.textContent = 'You play ' + colour + '. Coach Guard is ' + (S.guardOn ? 'on' : 'off') + '.';
+    var tcPhrase = (TIME_CONTROLS[S.timeChoice] || TIME_CONTROLS.none).phrase;
+    ui.homeNote.textContent = 'You play ' + colour + ' with ' + tcPhrase + '. Coach Guard is ' + (S.guardOn ? 'on' : 'off') + '.';
     ui.btnHomeContinue.hidden = !(S.started && S.phase !== 'over' && S.game.history().length > 0);
 
     ui.homePuzzleCount.textContent = String(bank.length);
@@ -2689,7 +2982,7 @@
       title.textContent = 'vs ' + lvl.name + ' bot';
       var sub = document.createElement('span');
       sub.className = 'history-sub';
-      var how = { checkmate: 'Checkmate', stalemate: 'Stalemate', repetition: 'Repetition', insufficient: 'Dead position', fifty: '50-move rule' }[g.how] || 'Finished';
+      var how = { checkmate: 'Checkmate', timeout: 'On time', stalemate: 'Stalemate', repetition: 'Repetition', insufficient: 'Dead position', fifty: '50-move rule' }[g.how] || 'Finished';
       sub.textContent = how + ', ' + g.moves + (g.moves === 1 ? ' move' : ' moves') + ' as ' + (g.color === 'b' ? 'Black' : 'White') + ', ' + relativeDay(g.at);
       text.appendChild(title);
       text.appendChild(sub);
@@ -2777,9 +3070,16 @@
       soundToggle: $('soundToggle'),
       reviewBar: $('reviewBar'),
       reviewLabel: $('reviewLabel'),
+      btnFirst: $('btnFirst'),
       btnPrev: $('btnPrev'),
+      btnAutoplay: $('btnAutoplay'),
       btnNext: $('btnNext'),
+      btnLast: $('btnLast'),
       btnLive: $('btnLive'),
+      topClock: $('topClock'),
+      topClockTime: $('topClockTime'),
+      bottomClock: $('bottomClock'),
+      bottomClockTime: $('bottomClockTime'),
       summaryPanel: $('summaryPanel'),
       summaryResult: $('summaryResult'),
       summaryLine: $('summaryLine'),
@@ -2866,6 +3166,16 @@
       });
     });
 
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="timeControl"]'), function (input) {
+      input.checked = input.value === S.timeChoice;
+      input.addEventListener('change', function () {
+        if (!input.checked) return;
+        S.timeChoice = input.value;
+        saveSettings();
+        if (!S.started) showHome();
+      });
+    });
+
     ui.btnNewGame.addEventListener('click', function () { showPane('new'); });
     ui.btnTakeBack.addEventListener('click', takeBack);
     ui.btnHint.addEventListener('click', showHint);
@@ -2898,15 +3208,24 @@
     // Replay: move list, arrow buttons and keyboard.
     ui.moveList.addEventListener('click', function (e) {
       var b = e.target.closest('[data-ply]');
-      if (b) enterView(parseInt(b.dataset.ply, 10));
+      if (b) stepTo(parseInt(b.dataset.ply, 10));
     });
+    ui.btnFirst.addEventListener('click', function () { stepTo(0); });
     ui.btnPrev.addEventListener('click', function () {
-      enterView((S.viewPly === null ? S.game.history().length : S.viewPly) - 1);
+      stepTo((S.viewPly === null ? S.game.history().length : S.viewPly) - 1);
     });
+    ui.btnAutoplay.addEventListener('click', toggleAutoplay);
     ui.btnNext.addEventListener('click', function () {
-      if (S.viewPly !== null) enterView(S.viewPly + 1);
+      if (S.viewPly !== null) stepTo(S.viewPly + 1);
     });
-    ui.btnLive.addEventListener('click', function () { exitView(true); });
+    ui.btnLast.addEventListener('click', function () {
+      stopAutoplay();
+      exitView(true);
+    });
+    ui.btnLive.addEventListener('click', function () {
+      stopAutoplay();
+      exitView(true);
+    });
     document.addEventListener('keydown', function (e) {
       if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || ui.viewPlay.hidden) return;
       var t = e.target || {};
@@ -2916,23 +3235,33 @@
       var cur = S.viewPly === null ? S.game.history().length : S.viewPly;
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        enterView(cur - 1);
+        stepTo(cur - 1);
       } else if (e.key === 'ArrowRight' && S.viewPly !== null) {
         e.preventDefault();
-        enterView(cur + 1);
+        stepTo(cur + 1);
       } else if (e.key === 'Home') {
         e.preventDefault();
-        enterView(0);
+        stepTo(0);
       } else if (e.key === 'End' && S.viewPly !== null) {
         e.preventDefault();
+        stopAutoplay();
         exitView(true);
       }
+    });
+
+    // Keep the clocks if the tab is closed or the phone switches apps mid-game.
+    function saveIfSteady() {
+      if (S.started && (S.phase === 'player' || S.phase === 'bot') && ownsSavedGame()) saveGame();
+    }
+    window.addEventListener('pagehide', saveIfSteady);
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') saveIfSteady();
     });
 
     // End-of-game summary.
     ui.btnSummaryBank.addEventListener('click', function () { showTab('bank'); });
     ui.btnSummaryReview.addEventListener('click', function () {
-      enterView(S.summaryStartPly);
+      stepTo(S.summaryStartPly);
       if (window.matchMedia('(max-width: 1023px)').matches) {
         ui.boardWrap.scrollIntoView({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
       }
@@ -2941,7 +3270,7 @@
       var len = S.game.history().length;
       if (!len) return;
       var rect = ui.evalGraph.getBoundingClientRect();
-      enterView(Math.round(((e.clientX - rect.left) / rect.width) * len));
+      stepTo(Math.round(((e.clientX - rect.left) / rect.width) * len));
     });
 
     ui.tabHome.addEventListener('click', function () { showTab('home'); });

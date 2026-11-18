@@ -35,7 +35,7 @@ Then open `http://localhost:3000` (or `:8000`).
 
 ## Layout
 
-A sidebar on the left switches between **Home**, **Play**, **Blunder Bank** and **Settings**. The board sits in the middle with player bars above and below it. The right panel has three tabs: **Game** (status, controls, game summary, coach notes, moves), **New game** (choose your colour and pick a bot from six cards) and **Settings** (Coach Guard, evaluation bar, sounds, board colour). On phones the sidebar turns into a slide-out menu behind the ☰ button, the top bar gets quick buttons for the Blunder Bank and sound, and the site opens on **Home**: a Play card with level chips and a big Start game button, shortcut buttons, a puzzle card showing your newest saved blunder, your game history, and stats (games, wins, Coach Guard saves, puzzles solved and waiting). Finishing games without a blunder builds a clean-game streak.
+A sidebar on the left switches between **Home**, **Play**, **Blunder Bank** and **Settings**. The board sits in the middle with player bars above and below it. The right panel has three tabs: **Game** (status, controls, game summary, coach notes, moves), **New game** (choose your colour and time limit, then pick a bot from six cards) and **Settings** (Coach Guard, evaluation bar, sounds, board colour). On phones the sidebar turns into a slide-out menu behind the ☰ button, the top bar gets quick buttons for the Blunder Bank and sound, and the site opens on **Home**: a Play card with level chips and a big Start game button, shortcut buttons, a puzzle card showing your newest saved blunder, your game history, and stats (games, wins, Coach Guard saves, puzzles solved and waiting). Finishing games without a blunder builds a clean-game streak. During a game on a phone, the board runs edge to edge between the two player bars, the panel tabs become an icon bar under the board, and the step buttons stay pinned to the bottom of the screen. The evaluation bar is left out on phones to keep the board full width; the score still shows next to the status.
 
 ## What's inside
 
@@ -55,6 +55,10 @@ A sidebar on the left switches between **Home**, **Play**, **Blunder Bank** and 
 **Coach notes.** After each move, deterministic rules in `coach.js` describe what happened in beginner language: captures, checks, castling, central pawns, development, early queen moves, loose pieces, and when the bot slips up.
 
 **My Blunder Bank.** Every blunder is saved (position + Stockfish's best move), whether the guard caught it or not. In the Blunder Bank tab you replay the position and look for a better move. Stockfish's move, or any move that keeps the position within 0.6 pawns of it, solves the puzzle and clears it from the queue.
+
+**Clocks.** Each player bar has a clock that turns white while that side is thinking. Pick a time limit under New game: **No limit** (the clocks count how long each side spends thinking), **15 | 10** (15 minutes plus 10 seconds after every move), **10 min** or **5 min**. Your clock stops while the coach checks your move and while the Coach Guard banner is open, so the coach never costs you time. If a clock runs out, that side loses, unless the other side has only a king, or a king and one bishop or knight, which makes it a draw. The bot speeds up when it's short on time.
+
+**Step buttons.** Under the panel: jump to the start, step back, play through the moves (press again to pause), step forward, and return to the live position. From the live position, the play button replays the whole game from move 1.
 
 **Bot levels.** Six levels, from Rookie (plays random moves part of the time) up to full-strength Stockfish, using Stockfish's `Skill Level` option.
 
