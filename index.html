@@ -117,6 +117,10 @@
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 3h6v6H3zM15 3h6v6h-6zM9 9h6v6H9zM3 15h6v6H3zM15 15h6v6h-6z" fill="currentColor"/></svg></span>
           <span class="nav-label">Play</span>
         </button>
+        <button type="button" class="nav-item" id="tab-puzzles" data-view="puzzles">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h5a3 3 0 0 1 6 0h5v5a3 3 0 0 1 0 6v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
+          <span class="nav-label">Puzzles</span>
+        </button>
         <button type="button" class="nav-item" id="tab-bank" data-view="bank">
           <span class="nav-icon nav-icon-text" aria-hidden="true">??</span>
           <span class="nav-label">Blunder Bank</span>
@@ -165,6 +169,7 @@
 
             <nav class="home-menu" aria-label="Shortcuts">
               <button type="button" class="menu-btn" id="btnHomeContinue" hidden><span class="menu-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg></span><span>Continue game</span></button>
+              <button type="button" class="menu-btn" data-go="puzzles"><span class="menu-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h5a3 3 0 0 1 6 0h5v5a3 3 0 0 1 0 6v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span><span>Puzzles</span></button>
               <button type="button" class="menu-btn" data-go="levels"><span class="menu-btn-icon menu-btn-glyph" aria-hidden="true">♞</span><span>All bot levels</span></button>
               <button type="button" class="menu-btn" data-go="bank"><span class="menu-btn-icon menu-btn-text" aria-hidden="true">??</span><span>My Blunder Bank</span></button>
               <button type="button" class="menu-btn" data-go="settings"><span class="menu-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg></span><span>Settings</span></button>
@@ -416,6 +421,65 @@
             <button type="button" class="nav-step" id="btnNext" aria-label="Next move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.5 15 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             <button type="button" class="nav-step" id="btnLast" aria-label="Current position"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M5.5 5.5 14 12l-8.5 6.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
           </nav>
+        </aside>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- Puzzles (Lichess puzzle database, public domain)                -->
+      <!-- ============================================================== -->
+      <section id="view-puzzles" class="view view-grid" aria-label="Puzzles" hidden>
+        <div class="play-col">
+          <div class="player-strip">
+            <span class="avatar avatar-theme" id="pzAvatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h5a3 3 0 0 1 6 0h5v5a3 3 0 0 1 0 6v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
+            <div class="strip-text">
+              <span class="strip-line">
+                <span class="strip-name" id="pzTitle">Puzzles</span>
+                <span class="strip-side" id="pzSide"></span>
+              </span>
+              <span class="strip-side" id="pzTask">Loading puzzles…</span>
+            </div>
+            <div class="pz-rating" title="Your puzzle rating goes up when you solve puzzles and down when you miss them.">
+              <span class="pz-rating-label">Rating</span>
+              <span class="pz-rating-value font-display" id="pzRating">600</span>
+            </div>
+          </div>
+          <div class="board-row board-row-puzzle">
+            <div id="pzBoard" class="board" tabindex="-1" aria-label="Puzzle board"></div>
+          </div>
+        </div>
+
+        <aside class="side-panel" aria-label="Puzzle panel">
+          <header class="side-head">
+            <span class="side-head-icon side-head-svg" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h5a3 3 0 0 1 6 0h5v5a3 3 0 0 1 0 6v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
+            <h1 class="side-title font-display">Puzzles</h1>
+          </header>
+          <div class="side-body">
+            <div class="chip-row chip-row-wrap" id="pzThemes" role="radiogroup" aria-label="Puzzle type"></div>
+            <p class="pz-theme-help" id="pzThemeHelp"></p>
+
+            <div class="status-card">
+              <span class="status-dot" id="pzDot" data-kind="busy" aria-hidden="true"></span>
+              <div class="status-copy">
+                <p class="status-text font-display" id="pzStatus" role="status" aria-live="polite">Loading puzzles…</p>
+                <p class="status-sub" id="pzFeedback"></p>
+              </div>
+            </div>
+
+            <div class="controls" role="toolbar" aria-label="Puzzle controls">
+              <button type="button" class="btn btn-ghost" id="btnPzHint">Show hint</button>
+              <button type="button" class="btn btn-ghost" id="btnPzSolution">Show solution</button>
+              <button type="button" class="btn btn-primary" id="btnPzNext">Next puzzle</button>
+              <button type="button" class="btn btn-ghost" id="btnPzRetry" hidden>Try again</button>
+            </div>
+
+            <div class="stat-row" aria-label="Your puzzle stats">
+              <div class="stat-mini"><span class="stat-mini-value font-display" id="pzSolvedToday">0</span><span class="stat-mini-label">Solved today</span></div>
+              <div class="stat-mini"><span class="stat-mini-value font-display" id="pzStreak">0</span><span class="stat-mini-label">In a row</span></div>
+              <div class="stat-mini"><span class="stat-mini-value font-display" id="pzSolvedTotal">0</span><span class="stat-mini-label">Solved in total</span></div>
+            </div>
+
+            <p class="block-help pz-credit">Puzzles come from real games on Lichess, from the free <a href="https://database.lichess.org/#puzzles" target="_blank" rel="noopener">Lichess puzzle database</a> (public domain).</p>
+          </div>
         </aside>
       </section>
 

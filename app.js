@@ -2862,6 +2862,441 @@
     }
   };
 
+  /* ======================================================================== */
+  /* Puzzles: beginner puzzles from the Lichess puzzle database (CC0)         */
+  /* ======================================================================== */
+
+  var PUZZLE_KEY = 'chessTrainer.puzzles.v1';
+  var PUZZLE_THEMES = [
+    { id: 'mixed', name: 'Mixed', title: 'Puzzle', help: 'A mix of everything. Look at every check, every capture and every attack.' },
+    { id: 'mate1', name: 'Checkmate in 1', title: 'Checkmate in 1', help: 'Find the one move that traps the king. Try every check!' },
+    { id: 'mate2', name: 'Checkmate in 2', title: 'Checkmate in 2', help: "Two moves to checkmate. Your first move forces the bot's answer, then you finish the job." },
+    { id: 'free', name: 'Free pieces', title: 'Win a free piece', help: "One of the bot's pieces has no protection, or it's trapped. Find the move that wins it." },
+    { id: 'fork', name: 'Forks', title: 'Fork', help: 'A fork is one move that attacks two things at once. The bot can only save one of them.' },
+    { id: 'pin', name: 'Pins', title: 'Pin', help: "Attack two of the bot's pieces that stand in a line. Whatever the front one does, the bot loses something." },
+    { id: 'backrank', name: 'Back-row mates', title: 'Back-row mate', help: 'The king is stuck behind its own pawns on the back row. A rook or queen can checkmate it there.' },
+    { id: 'promote', name: 'Pawn to queen', title: 'Pawn to queen', help: 'Push a pawn all the way to the last row so it turns into a queen.' }
+  ];
+
+  function puzzleTheme(id) {
+    for (var i = 0; i < PUZZLE_THEMES.length; i++) if (PUZZLE_THEMES[i].id === id) return PUZZLE_THEMES[i];
+    return PUZZLE_THEMES[0];
+  }
+
+  function todayKey() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  var Puzzles = {
+    data: null,
+    loading: null,
+    board: null,
+    game: null,
+    cur: null,
+    idx: 0,
+    color: 'w',
+    phase: 'idle', // idle | loading | intro | solving | wrong | solved | revealed | error
+    failed: false,
+    hinted: false,
+    epoch: 0,
+    timer: null,
+    stats: null,
+
+    loadStats: function () {
+      var st = readJSON(PUZZLE_KEY, {}) || {};
+      this.stats = {
+        rating: typeof st.rating === 'number' && isFinite(st.rating) ? st.rating : 600,
+        played: parseInt(st.played, 10) || 0,
+        solved: parseInt(st.solved, 10) || 0,
+        streak: parseInt(st.streak, 10) || 0,
+        best: parseInt(st.best, 10) || 0,
+        seen: Array.isArray(st.seen) ? st.seen.filter(function (x) { return typeof x === 'string'; }).slice(-800) : [],
+        day: typeof st.day === 'string' ? st.day : '',
+        today: parseInt(st.today, 10) || 0,
+        theme: typeof st.theme === 'string' ? st.theme : 'mixed'
+      };
+      if (this.stats.day !== todayKey()) {
+        this.stats.day = todayKey();
+        this.stats.today = 0;
+      }
+    },
+
+    saveStats: function () {
+      store.set(PUZZLE_KEY, JSON.stringify(this.stats));
+    },
+
+    init: function () {
+      var self = this;
+      this.loadStats();
+      this.board = new BoardView($('pzBoard'), {
+        interactive: function () { return self.phase === 'solving'; },
+        canMoveFrom: function (sq) {
+          if (!self.game || self.phase !== 'solving' || self.game.turn() !== self.color) return false;
+          var p = self.game.get(sq);
+          return !!p && p.color === self.color;
+        },
+        legalTargets: function (sq) { return self.game ? legalTargets(self.game, sq) : []; },
+        onMove: function (from, to) { self.onMove(from, to); }
+      });
+      var chips = $('pzThemes');
+      PUZZLE_THEMES.forEach(function (t) {
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chip';
+        chip.setAttribute('role', 'radio');
+        chip.dataset.theme = t.id;
+        chip.textContent = t.name;
+        chips.appendChild(chip);
+      });
+      chips.addEventListener('click', function (e) {
+        var chip = e.target.closest('[data-theme]');
+        if (!chip) return;
+        self.stats.theme = chip.dataset.theme;
+        self.saveStats();
+        self.renderThemes();
+        if (self.data) self.next();
+      });
+      $('btnPzHint').addEventListener('click', function () { self.hint(); });
+      $('btnPzSolution').addEventListener('click', function () { self.reveal(); });
+      $('btnPzNext').addEventListener('click', function () { self.next(); });
+      $('btnPzRetry').addEventListener('click', function () { if (self.cur) self.open(self.cur, true); });
+      this.renderThemes();
+      this.renderStats();
+    },
+
+    renderThemes: function () {
+      var theme = this.stats.theme;
+      Array.prototype.forEach.call($('pzThemes').querySelectorAll('[data-theme]'), function (chip) {
+        chip.setAttribute('aria-checked', String(chip.dataset.theme === theme));
+      });
+      $('pzThemeHelp').textContent = puzzleTheme(theme).help;
+    },
+
+    renderStats: function () {
+      if (this.stats.day !== todayKey()) {
+        this.stats.day = todayKey();
+        this.stats.today = 0;
+      }
+      $('pzRating').textContent = String(Math.round(this.stats.rating));
+      $('pzSolvedToday').textContent = String(this.stats.today);
+      $('pzStreak').textContent = String(this.stats.streak);
+      $('pzSolvedTotal').textContent = String(this.stats.solved);
+    },
+
+    status: function (text, kind, feedback, tone) {
+      $('pzStatus').textContent = text;
+      $('pzDot').dataset.kind = kind || 'you';
+      $('pzFeedback').textContent = feedback || '';
+      $('pzStatus').closest('.status-card').dataset.tone = tone || '';
+    },
+
+    setButtons: function () {
+      var active = this.phase === 'solving' || this.phase === 'wrong' || this.phase === 'intro';
+      $('btnPzHint').disabled = this.phase !== 'solving' || this.hinted;
+      $('btnPzSolution').disabled = !active;
+      $('btnPzNext').disabled = !this.data;
+      $('btnPzRetry').hidden = this.phase !== 'revealed';
+      this.board.refresh();
+    },
+
+    load: function () {
+      var self = this;
+      if (this.data) return Promise.resolve(this.data);
+      if (this.loading) return this.loading;
+      this.phase = 'loading';
+      this.status('Loading puzzles…', 'busy');
+      this.loading = fetch('./puzzles.json')
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .then(function (json) {
+          self.data = (json && Array.isArray(json.p) ? json.p : [])
+            .filter(function (row) { return Array.isArray(row) && row.length >= 5; })
+            .map(function (row) {
+              return { id: String(row[0]), fen: String(row[1]), moves: String(row[2]).split(' '), rating: +row[3] || 1000, tags: String(row[4]).split(',') };
+            });
+          return self.data;
+        })
+        .catch(function () {
+          self.loading = null;
+          self.phase = 'error';
+          self.status("Couldn't load the puzzles.", 'warn', 'Check your internet connection, then press Next puzzle to try again.');
+          self.setButtons();
+          $('btnPzNext').disabled = false;
+          return null;
+        });
+      return this.loading;
+    },
+
+    onShow: function () {
+      var self = this;
+      this.renderStats();
+      if (this.cur && this.phase !== 'error') return;
+      this.load().then(function (d) { if (d && !self.cur) self.next(); });
+    },
+
+    /** A puzzle near the player's rating, in the chosen theme, not seen recently. */
+    pick: function () {
+      var theme = this.stats.theme;
+      var seen = {};
+      this.stats.seen.forEach(function (id) { seen[id] = true; });
+      var pool = this.data.filter(function (p) { return theme === 'mixed' || p.tags.indexOf(theme) !== -1; });
+      var fresh = pool.filter(function (p) { return !seen[p.id]; });
+      if (!fresh.length) {
+        // Everything in this theme has been seen: start the theme over.
+        var ids = {};
+        pool.forEach(function (p) { ids[p.id] = true; });
+        this.stats.seen = this.stats.seen.filter(function (id) { return !ids[id]; });
+        fresh = pool;
+      }
+      var r = this.stats.rating;
+      fresh.sort(function (a, b) { return Math.abs(a.rating - r) - Math.abs(b.rating - r); });
+      var near = fresh.filter(function (p) { return Math.abs(p.rating - r) <= 125; });
+      var choices = near.length >= 5 ? near : fresh.slice(0, 12);
+      return choices[Math.floor(Math.random() * choices.length)] || null;
+    },
+
+    next: function () {
+      var self = this;
+      this.load().then(function (d) {
+        if (!d || !d.length) return;
+        var p = self.pick();
+        if (p) self.open(p, false);
+      });
+    },
+
+    open: function (p, retry) {
+      var self = this;
+      clearTimeout(this.timer);
+      this.epoch++;
+      var epoch = this.epoch;
+      this.cur = p;
+      this.idx = 0;
+      if (!retry) {
+        this.failed = false;
+        this.hinted = false;
+      }
+      this.game = new window.Chess(p.fen);
+      this.color = C.opposite(this.game.turn());
+      this.phase = 'intro';
+      var mainTag = p.tags.indexOf('mate1') !== -1 ? 'mate1' : p.tags.indexOf('mate2') !== -1 ? 'mate2' : p.tags[0];
+      var theme = this.stats.theme === 'mixed' ? puzzleTheme(mainTag) : puzzleTheme(this.stats.theme);
+      $('pzTitle').textContent = theme.title;
+      $('pzSide').textContent = '(you are ' + C.COLOR_NAMES[this.color] + ')';
+      $('pzTask').textContent = p.tags.indexOf('mate1') !== -1 ? 'Find checkmate in 1 move'
+        : p.tags.indexOf('mate2') !== -1 ? 'Find checkmate in 2 moves'
+        : 'Find the best move';
+      $('pzRating').parentElement.classList.remove('is-up', 'is-down');
+      this.board.clearSelection();
+      this.board.setOrientation(this.color);
+      this.board.setFen(p.fen);
+      this.board.setMarks({ lastMove: null, check: checkSquare(this.game), danger: [], hint: [] });
+      this.board.setArrows([]);
+      this.status("Watch the bot's move…", 'bot');
+      this.setButtons();
+      this.timer = setTimeout(function () {
+        if (epoch !== self.epoch) return;
+        self.playAuto(p.moves[0]);
+        self.idx = 1;
+        self.phase = 'solving';
+        self.status('Your turn. ' + $('pzTask').textContent + '.', 'you', retry ? 'Try again from the start.' : '');
+        self.setButtons();
+      }, 650);
+    },
+
+    playAuto: function (uci) {
+      var mv = safeMove(this.game, uciToMove(uci));
+      if (!mv) return null;
+      this.board.setFen(this.game.fen(), { animate: true });
+      this.board.setMarks({ lastMove: { from: mv.from, to: mv.to }, check: checkSquare(this.game), hint: [], danger: [] });
+      this.board.setArrows([]);
+      playMoveSound(mv, this.game, mv.color !== this.color);
+      return mv;
+    },
+
+    onMove: async function (from, to) {
+      if (this.phase !== 'solving' || !this.game) return;
+      var self = this;
+      var epoch = this.epoch;
+      var expected = this.cur.moves[this.idx];
+      var promotion = null;
+      if (needsPromotion(this.game, from, to)) {
+        this.phase = 'promoting';
+        promotion = await askPromotion(this.color);
+        if (epoch !== this.epoch) return;
+        this.phase = 'solving';
+        if (!promotion) {
+          this.board.refresh();
+          return;
+        }
+      }
+      var mv = safeMove(this.game, promotion ? { from: from, to: to, promotion: promotion } : { from: from, to: to });
+      if (!mv) {
+        this.board.refresh();
+        return;
+      }
+      this.board.setFen(this.game.fen(), { animate: true });
+      this.board.setMarks({ lastMove: { from: mv.from, to: mv.to }, check: checkSquare(this.game), hint: [], danger: [] });
+      this.board.setArrows([]);
+      playMoveSound(mv, this.game, false);
+      var last = this.idx >= this.cur.moves.length - 1;
+      var right = moveToUci(mv) === expected || (last && ChessAPI.isCheckmate(this.game));
+      if (!right) {
+        this.wrong(mv);
+        return;
+      }
+      if (last) {
+        this.solved(mv);
+        return;
+      }
+      this.phase = 'intro';
+      this.setButtons();
+      this.status('Good move! Keep going.', 'bot', 'Watch the bot answer…', 'good');
+      this.timer = setTimeout(function () {
+        if (epoch !== self.epoch) return;
+        self.playAuto(self.cur.moves[self.idx + 1]);
+        self.idx += 2;
+        self.phase = 'solving';
+        self.status('Your turn again. Now finish it!', 'you', '', 'good');
+        self.setButtons();
+      }, 550);
+    },
+
+    wrong: function (mv) {
+      var self = this;
+      var epoch = this.epoch;
+      this.phase = 'wrong';
+      Sound.play('wrong');
+      var first = !this.failed;
+      if (first) this.rate(0);
+      var tag = this.cur.tags;
+      var tipText = tag.indexOf('mate1') !== -1 || tag.indexOf('mate2') !== -1 || tag.indexOf('backrank') !== -1
+        ? "That doesn't trap the king. Which checks do you have?"
+        : tag.indexOf('fork') !== -1 ? 'Look for a move that attacks two of the bot\'s pieces at once.'
+        : tag.indexOf('free') !== -1 ? "Look for a bot piece that nothing protects."
+        : 'Look at every check, every capture and every attack.';
+      this.status('Not that one.', 'warn', tipText + ' Try again, or press Show solution.', 'bad');
+      this.setButtons();
+      this.timer = setTimeout(function () {
+        if (epoch !== self.epoch) return;
+        self.game.undo();
+        self.board.setFen(self.game.fen(), { animate: true });
+        var hist = self.game.history({ verbose: true });
+        var lastMv = hist[hist.length - 1];
+        self.board.setMarks({ lastMove: lastMv ? { from: lastMv.from, to: lastMv.to } : null, check: checkSquare(self.game), hint: [], danger: [] });
+        self.phase = 'solving';
+        self.setButtons();
+      }, 1000);
+      this.renderStats();
+    },
+
+    explain: function (mv) {
+      var t = this.cur.tags;
+      if (ChessAPI.isCheckmate(this.game)) return "Checkmate! The bot's king is under attack and has no safe square.";
+      if (t.indexOf('fork') !== -1) {
+        var first = this.game.history({ verbose: true }).filter(function (m) { return m.color === mv.color; })[0] || mv;
+        return 'Your ' + C.pieceName(first.piece) + ' attacked two pieces at once, so the bot could not save both.';
+      }
+      if (t.indexOf('free') !== -1) return "That piece had no protection, so you won it for free.";
+      if (t.indexOf('pin') !== -1) return "The bot's pieces were lined up, so it could not save both.";
+      if (t.indexOf('promote') !== -1) return 'Your pawn made it to the last row and became a queen.';
+      return 'That was the best move.';
+    },
+
+    solved: function (mv) {
+      this.phase = 'solved';
+      Sound.play('correct');
+      var delta = 0;
+      if (!this.failed) {
+        delta = this.rate(this.hinted ? 0.5 : 1);
+        this.stats.solved++;
+        this.stats.today++;
+        this.stats.streak++;
+        this.stats.best = Math.max(this.stats.best, this.stats.streak);
+        this.saveStats();
+      }
+      var change = delta > 0 ? ' Your rating went up by ' + delta + '.' : '';
+      this.status(this.failed ? 'Solved on another try.' : 'Solved!', 'over', this.explain(mv) + change, 'good');
+      this.setButtons();
+      this.renderStats();
+      if (typeof onProgress === 'function') onProgress('puzzle', { solved: !this.failed, rating: this.stats.rating });
+    },
+
+    hint: function () {
+      if (this.phase !== 'solving' || this.hinted) return;
+      var u = this.cur.moves[this.idx];
+      var p = this.game.get(u.slice(0, 2));
+      this.hinted = true;
+      Sound.play('hint');
+      this.board.setMarks({ hint: [u.slice(0, 2)] });
+      this.status('Hint', 'you', 'Move your ' + (p ? C.NAMES[p.type] : 'piece') + ' on ' + u.slice(0, 2) + ' (the highlighted square).');
+      this.setButtons();
+    },
+
+    reveal: function () {
+      var self = this;
+      if (!this.cur || (this.phase !== 'solving' && this.phase !== 'wrong' && this.phase !== 'intro')) return;
+      clearTimeout(this.timer);
+      this.epoch++;
+      var epoch = this.epoch;
+      if (!this.failed) this.rate(0);
+      this.phase = 'revealed';
+      // Replay the puzzle from the start, then step through the answer.
+      this.game = new window.Chess(this.cur.fen);
+      var words = [];
+      var steps = this.cur.moves.slice();
+      this.board.setFen(this.cur.fen);
+      this.setButtons();
+      this.status('Here is the answer.', 'bot', '');
+      var i = 0;
+      function step() {
+        if (epoch !== self.epoch || i >= steps.length) {
+          if (epoch === self.epoch) {
+            self.status('Here is the answer.', 'over', words.length ? 'You could ' + words.join(', then ') + '.' : '');
+            self.board.setArrows([]);
+          }
+          return;
+        }
+        var u = steps[i];
+        var before = self.game.fen();
+        var mv = self.playAuto(u);
+        if (mv && i % 2 === 1) {
+          words.push(C.moveAction(describeUci(before, u), true));
+          self.board.setArrows([{ from: mv.from, to: mv.to, color: 'green' }]);
+        }
+        i++;
+        self.timer = setTimeout(step, 900);
+      }
+      step();
+      this.renderStats();
+    },
+
+    /** Elo-style update; returns the change in points. */
+    rate: function (score) {
+      var st = this.stats;
+      var pr = this.cur ? this.cur.rating : st.rating;
+      var expected = 1 / (1 + Math.pow(10, (pr - st.rating) / 400));
+      var k = st.played < 20 ? 40 : 24;
+      var delta = Math.round(k * (score - expected));
+      st.rating = Math.max(400, Math.min(2500, st.rating + delta));
+      st.played++;
+      if (score === 0) {
+        st.streak = 0;
+        this.failed = true;
+      }
+      if (this.cur && st.seen.indexOf(this.cur.id) === -1) st.seen.push(this.cur.id);
+      if (st.seen.length > 800) st.seen = st.seen.slice(-800);
+      this.saveStats();
+      var badge = $('pzRating').parentElement;
+      badge.classList.toggle('is-up', delta > 0);
+      badge.classList.toggle('is-down', delta < 0);
+      this.renderStats();
+      return delta;
+    }
+  };
+
   /** The best move of a saved puzzle, in words. */
   function bestWords(e) {
     var mv = describeUci(e.fen, e.bestMove);
@@ -2896,24 +3331,30 @@
     return window.matchMedia && window.matchMedia('(max-width: 1023px)').matches;
   }
 
+  var VIEW_NAMES = ['home', 'play', 'puzzles', 'bank'];
+
   function showTab(name) {
     if (S.phase === 'warning' || S.phase === 'promoting') return;
-    if (name !== 'home' && name !== 'bank') name = 'play';
-    var wasHidden = name === 'home' ? ui.viewHome.hidden : name === 'bank' ? ui.viewBank.hidden : ui.viewPlay.hidden;
-    ui.viewHome.hidden = name !== 'home';
-    ui.viewPlay.hidden = name !== 'play';
-    ui.viewBank.hidden = name !== 'bank';
-    [['home', ui.tabHome], ['play', ui.tabPlay], ['bank', ui.tabBank]].forEach(function (pair) {
-      if (pair[0] === name) pair[1].setAttribute('aria-current', 'page');
-      else pair[1].removeAttribute('aria-current');
+    if (document.body.classList.contains('modal-open')) return;
+    if (VIEW_NAMES.indexOf(name) === -1) name = 'play';
+    var target = $('view-' + name);
+    var wasHidden = target.hidden;
+    VIEW_NAMES.forEach(function (n) {
+      var v = $('view-' + n);
+      if (v) v.hidden = n !== name;
+      var tab = $('tab-' + n);
+      if (!tab) return;
+      if (n === name) tab.setAttribute('aria-current', 'page');
+      else tab.removeAttribute('aria-current');
     });
     closeDrawer();
     try {
-      history.replaceState(null, '', name === 'bank' ? '#bank' : name === 'home' ? '#home' : location.pathname + location.search);
+      history.replaceState(null, '', name === 'play' ? location.pathname + location.search : '#' + name);
     } catch (e) {
       /* file:// or sandboxed */
     }
     if (name === 'bank') Bank.onShow();
+    if (name === 'puzzles') Puzzles.onShow();
     if (name === 'home') renderHome();
     if (wasHidden && isMobile()) window.scrollTo(0, 0);
   }
@@ -3375,6 +3816,7 @@
     ui.tabHome.addEventListener('click', function () { showTab('home'); });
     ui.tabPlay.addEventListener('click', function () { showTab('play'); });
     ui.tabBank.addEventListener('click', function () { showTab('bank'); });
+    $('tab-puzzles').addEventListener('click', function () { showTab('puzzles'); });
     $('navSettings').addEventListener('click', function () { goToPlay('settings'); });
 
     ui.btnMenu.addEventListener('click', function () {
@@ -3408,7 +3850,7 @@
     Array.prototype.forEach.call(ui.viewHome.querySelectorAll('[data-go]'), function (btn) {
       btn.addEventListener('click', function () {
         var go = btn.dataset.go;
-        if (go === 'bank') showTab('bank');
+        if (go === 'bank' || go === 'puzzles') showTab(go);
         else if (go === 'settings') goToPlay('settings');
         else goToPlay('new');
       });
@@ -3436,13 +3878,14 @@
     loadSettings();
     bindUI();
     Bank.init();
+    Puzzles.init();
     setupInstall();
     updateBankBadge();
     engine.start();
     S.homeLevel = S.levelIndex;
     if (!restoreGame()) showHome();
     var hash = location.hash;
-    if (hash === '#bank') showTab('bank');
+    if (hash === '#bank' || hash === '#puzzles') showTab(hash.slice(1));
     else if (hash === '#home' || (hash !== '#play' && isMobile())) showTab('home');
     else showTab('play');
   }

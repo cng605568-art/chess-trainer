@@ -2803,9 +2803,18 @@ button.move-san:hover {
   }
 
   /* Game panel as a phone app screen: icon tab bar, step buttons pinned at the bottom. */
-  #view-play .side-head {
+  #view-play .side-head,
+  #view-puzzles .side-head {
     display: none;
   }
+
+  /* Puzzles on phones and tablets: status and buttons right under the board. */
+  #view-puzzles .side-body > .status-card { order: 1; }
+  #view-puzzles .side-body > .controls { order: 2; }
+  #view-puzzles .side-body > .chip-row { order: 3; }
+  #view-puzzles .side-body > .pz-theme-help { order: 4; }
+  #view-puzzles .side-body > .stat-row { order: 5; }
+  #view-puzzles .side-body > .pz-credit { order: 6; }
 
   .side-panel {
     overflow: hidden;
@@ -2861,17 +2870,20 @@ button.move-san:hover {
 @media (max-width: 640px) {
   /* Edge-to-edge board, the way chess apps lay out a game on a phone. */
   #view-play,
+  #view-puzzles,
   #view-bank {
     gap: 0;
     margin: -14px -14px 0;
   }
 
   #view-play .play-col,
+  #view-puzzles .play-col,
   #view-bank .play-col {
     max-width: none;
   }
 
   #view-play .side-panel,
+  #view-puzzles .side-panel,
   #view-bank .side-panel {
     margin-top: 6px;
     border-radius: 0;
@@ -2980,4 +2992,112 @@ button.move-san:hover {
     padding-left: 8px;
     padding-right: 8px;
   }
+}
+
+/* ------------------------------------------------------------------------ */
+/* Puzzles                                                                  */
+/* ------------------------------------------------------------------------ */
+
+.chip-row-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.chip-row-wrap .chip {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 0.9rem;
+}
+
+.avatar-theme {
+  background: #3d3d3d;
+  color: #e6e6e6;
+}
+
+.avatar-theme svg,
+.side-head-svg svg {
+  width: 62%;
+  height: 62%;
+}
+
+.pz-theme-help {
+  margin: -6px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.pz-rating {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 88px;
+  height: 46px;
+  padding: 0 12px;
+  border-radius: 4px;
+  background: #1e1e1e;
+}
+
+.pz-rating-label {
+  color: var(--faint);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.pz-rating-value {
+  font-size: 1.3rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.pz-rating.is-up .pz-rating-value {
+  color: var(--good);
+}
+
+.pz-rating.is-down .pz-rating-value {
+  color: #ff8a84;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.stat-mini {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 4px;
+  border-radius: var(--radius-control);
+  background: var(--card);
+  text-align: center;
+}
+
+.stat-mini-value {
+  font-size: 1.25rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-mini-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.pz-credit a {
+  color: inherit;
+}
+
+#view-puzzles .status-card[data-tone="good"] {
+  box-shadow: inset 0 0 0 2px rgba(127, 182, 90, 0.55);
+}
+
+#view-puzzles .status-card[data-tone="bad"] {
+  box-shadow: inset 0 0 0 2px rgba(229, 83, 75, 0.5);
 }
