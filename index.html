@@ -157,6 +157,10 @@
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h5a3 3 0 0 1 6 0h5v5a3 3 0 0 1 0 6v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
           <span class="nav-label">Puzzles</span>
         </button>
+        <button type="button" class="nav-item" id="tab-analyze" data-view="analyze">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></span>
+          <span class="nav-label">Analyze</span>
+        </button>
         <button type="button" class="nav-item" id="tab-bank" data-view="bank">
           <span class="nav-icon nav-icon-text" aria-hidden="true">??</span>
           <span class="nav-label">Blunder Bank</span>
@@ -277,6 +281,7 @@
               <button type="button" class="menu-btn" id="btnHomeContinue" hidden><span class="menu-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg></span><span>Continue game</span></button>
               <button type="button" class="menu-btn" data-go="learn"><span class="menu-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 5.5C9.8 4 6.8 3.6 3 4v14c3.8-.4 6.8 0 9 1.5 2.2-1.5 5.2-1.9 9-1.5V4c-3.8-.4-6.8 0-9 1.5z"/><path d="M12 5.5v14"/></svg></span><span>Learn chess</span></button>
               <button type="button" class="menu-btn" data-go="puzzles"><span class="menu-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h5a3 3 0 0 1 6 0h5v5a3 3 0 0 1 0 6v5H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span><span>Puzzles</span></button>
+              <button type="button" class="menu-btn" data-go="analyze"><span class="menu-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></span><span>Analysis board</span></button>
               <button type="button" class="menu-btn" data-go="levels"><span class="menu-btn-icon menu-btn-glyph" aria-hidden="true">♞</span><span>All bot levels</span></button>
               <button type="button" class="menu-btn" data-go="bank"><span class="menu-btn-icon menu-btn-text" aria-hidden="true">??</span><span>My Blunder Bank</span></button>
               <button type="button" class="menu-btn" data-go="settings"><span class="menu-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg></span><span>Settings</span></button>
@@ -459,6 +464,7 @@
                 <button type="button" class="btn btn-primary" id="btnSummaryRetry" hidden>Try your biggest mistake again</button>
                 <button type="button" class="btn btn-ghost" id="btnSummaryBank">Practice these mistakes</button>
                 <button type="button" class="btn btn-ghost" id="btnSummaryReview">Replay the game</button>
+                <button type="button" class="btn btn-ghost" id="btnSummaryAnalyze">Analyze this game</button>
                 <button type="button" class="btn btn-ghost" id="btnShare">Share result</button>
               </div>
             </section>
@@ -759,6 +765,162 @@
             </div>
 
             <p class="block-help pz-credit">Puzzles come from real games on Lichess, from the free <a href="https://database.lichess.org/#puzzles" target="_blank" rel="noopener">Lichess puzzle database</a> (public domain).</p>
+          </div>
+        </aside>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- Analysis board and game review                                  -->
+      <!-- ============================================================== -->
+      <section id="view-analyze" class="view view-grid" aria-label="Analyze" hidden>
+        <div class="play-col">
+          <div class="player-strip">
+            <span class="avatar avatar-theme" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></span>
+            <div class="strip-text">
+              <span class="strip-line"><span class="strip-name" id="azTitle">Analysis board</span></span>
+              <span class="strip-side" id="azSub">White to move</span>
+            </div>
+            <div class="pz-rating az-score" title="Who's ahead, counted in pawns. Plus means White is ahead, minus means Black is.">
+              <span class="pz-rating-label">Score</span>
+              <span class="pz-rating-value font-display" id="azScore">0.0</span>
+            </div>
+          </div>
+          <div class="board-row board-row-puzzle">
+            <div id="azBoard" class="board" tabindex="-1" aria-label="Analysis board"></div>
+          </div>
+        </div>
+
+        <aside class="side-panel" aria-label="Analysis panel">
+          <header class="side-head">
+            <span class="side-head-icon side-head-svg" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg></span>
+            <h1 class="side-title font-display">Analyze</h1>
+          </header>
+          <div class="segmented az-tabs" role="tablist" aria-label="Analyze">
+            <label><input type="radio" name="azPane" value="board" checked><span>Board</span></label>
+            <label><input type="radio" name="azPane" value="games"><span>My games</span></label>
+          </div>
+
+          <div class="side-body" id="azPaneBoard">
+            <div class="az-analyze" id="azAnalyze">
+              <div class="status-card">
+                <span class="status-dot" id="azDot" data-kind="busy" aria-hidden="true"></span>
+                <div class="status-copy">
+                  <p class="status-text font-display" id="azStatus" role="status" aria-live="polite">Setting up the board…</p>
+                  <p class="status-sub" id="azBest"></p>
+                </div>
+              </div>
+              <div class="az-meter" role="img" id="azMeter" aria-label="Who's ahead"><span class="az-meter-fill" id="azMeterFill"></span></div>
+              <ol class="az-lines" id="azLines" aria-label="The computer's top moves"></ol>
+              <div class="controls">
+                <button type="button" class="btn btn-ghost" id="btnAzSetup">Set up position</button>
+                <button type="button" class="btn btn-ghost" id="btnAzFlip">Flip board</button>
+                <button type="button" class="btn btn-ghost" id="btnAzStart">Start position</button>
+                <button type="button" class="btn btn-primary" id="btnAzPlay">Play from here</button>
+              </div>
+              <nav class="move-nav az-nav" aria-label="Step through the moves">
+                <button type="button" class="nav-step" id="btnAzFirst" aria-label="First position"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M18.5 5.5 10 12l8.5 6.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                <button type="button" class="nav-step" id="btnAzPrev" aria-label="Previous move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 5.5 9 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                <button type="button" class="nav-step" id="btnAzNext" aria-label="Next move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.5 15 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                <button type="button" class="nav-step" id="btnAzLast" aria-label="Last move"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M5.5 5.5 14 12l-8.5 6.5" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              </nav>
+              <section class="block" aria-labelledby="azMovesHeading">
+                <h2 class="block-title font-display" id="azMovesHeading">Moves</h2>
+                <p class="block-help" id="azMovesHelp">Move the pieces for both sides to try ideas. The computer shows the best move with a green arrow.</p>
+                <ol class="movelist" id="azMoves"></ol>
+              </section>
+              <div class="az-fen">
+                <label class="az-fen-label" for="azFen">FEN</label>
+                <div class="az-fen-row">
+                  <input type="text" id="azFen" readonly spellcheck="false" autocomplete="off">
+                  <button type="button" class="btn btn-ghost" id="btnAzCopy">Copy</button>
+                </div>
+                <p class="block-help">FEN is a short text that describes a position. Paste one under Set up position.</p>
+              </div>
+            </div>
+
+            <div class="az-setup" id="azSetup" hidden>
+              <p class="block-help">Pick a piece, then tap squares to place it. Tap a square again to remove the piece.</p>
+              <div class="az-palette" id="azPalette" role="radiogroup" aria-label="Pieces"></div>
+              <div class="segmented" role="radiogroup" aria-label="Side to move">
+                <label><input type="radio" name="azTurn" value="w" checked><span>White to move</span></label>
+                <label><input type="radio" name="azTurn" value="b"><span>Black to move</span></label>
+              </div>
+              <div class="controls">
+                <button type="button" class="btn btn-ghost" id="btnAzClear">Clear board</button>
+                <button type="button" class="btn btn-ghost" id="btnAzReset">Start position</button>
+              </div>
+              <div class="az-fen">
+                <label class="az-fen-label" for="azFenEdit">Paste a FEN</label>
+                <div class="az-fen-row">
+                  <input type="text" id="azFenEdit" spellcheck="false" autocomplete="off" placeholder="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1">
+                  <button type="button" class="btn btn-ghost" id="btnAzLoadFen">Load</button>
+                </div>
+              </div>
+              <p class="az-error" id="azError" role="alert"></p>
+              <div class="controls">
+                <button type="button" class="btn btn-primary" id="btnAzDone">Done</button>
+                <button type="button" class="btn btn-ghost" id="btnAzCancel">Cancel</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="side-body" id="azPaneGames" hidden>
+            <div class="rv-find" id="rvFind">
+              <div class="segmented rv-sites" role="radiogroup" aria-label="Where you play">
+                <label><input type="radio" name="rvSite" value="chesscom" checked><span>Chess.com</span></label>
+                <label><input type="radio" name="rvSite" value="lichess"><span>Lichess</span></label>
+                <label><input type="radio" name="rvSite" value="pgn"><span>Paste a game</span></label>
+              </div>
+              <div class="rv-user" id="rvUserBox">
+                <label class="az-fen-label" for="rvUser">Your username</label>
+                <div class="az-fen-row">
+                  <input type="text" id="rvUser" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="username">
+                  <button type="button" class="btn btn-primary" id="btnRvFind">Find my games</button>
+                </div>
+                <p class="block-help">Your recent public games are loaded straight from the site. The coach then checks every move you made.</p>
+              </div>
+              <div class="rv-pgn" id="rvPgnBox" hidden>
+                <label class="az-fen-label" for="rvPgn">Paste a game (PGN)</label>
+                <textarea id="rvPgn" rows="6" spellcheck="false" placeholder="1. e4 e5 2. Nf3 Nc6 3. Bc4 ..."></textarea>
+                <div class="segmented" role="radiogroup" aria-label="You played">
+                  <label><input type="radio" name="rvColor" value="w" checked><span>I played White</span></label>
+                  <label><input type="radio" name="rvColor" value="b"><span>I played Black</span></label>
+                </div>
+                <button type="button" class="btn btn-primary" id="btnRvPgn">Review this game</button>
+                <p class="block-help">On Chess.com or Lichess, open a game, choose Share or Export, and copy the PGN.</p>
+              </div>
+              <p class="az-error" id="rvError" role="alert"></p>
+              <p class="rv-loading" id="rvLoading" hidden>Loading your games…</p>
+              <ol class="rv-games" id="rvGames" aria-label="Your recent games"></ol>
+            </div>
+
+            <div class="rv-review" id="rvReview" hidden>
+              <button type="button" class="ln-back" id="btnRvBack"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>All games</span></button>
+              <h2 class="rv-title font-display" id="rvTitle"></h2>
+              <p class="rv-meta" id="rvMeta"></p>
+              <div class="rv-progress" id="rvProgress">
+                <div class="az-meter"><span class="az-meter-fill rv-progress-fill" id="rvProgressFill"></span></div>
+                <p class="rv-progress-text" id="rvProgressText"></p>
+              </div>
+              <div class="rv-result" id="rvResult" hidden>
+                <ul class="quality-grid" id="rvQuality" aria-label="How your moves were rated">
+                  <li class="q-best"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Best moves</span><span class="q-count" data-q="best">0</span></li>
+                  <li class="q-good"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Good moves</span><span class="q-count" data-q="good">0</span></li>
+                  <li class="q-inaccuracy"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Small slips</span><span class="q-count" data-q="inaccuracy">0</span></li>
+                  <li class="q-mistake"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Mistakes</span><span class="q-count" data-q="mistake">0</span></li>
+                  <li class="q-blunder"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Big mistakes</span><span class="q-count" data-q="blunder">0</span></li>
+                </ul>
+                <p class="summary-line" id="rvSummary"></p>
+                <div class="moments" id="rvMomentsWrap">
+                  <h3 class="moments-title font-display">Key moments</h3>
+                  <ol class="moments-list" id="rvMoments"></ol>
+                </div>
+                <div class="summary-actions">
+                  <button type="button" class="btn btn-primary" id="btnRvBank">Add to My Blunder Bank</button>
+                  <button type="button" class="btn btn-ghost" id="btnRvBoard">Open on the analysis board</button>
+                </div>
+              </div>
+            </div>
           </div>
         </aside>
       </section>

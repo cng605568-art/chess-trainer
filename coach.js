@@ -464,6 +464,20 @@
    * Short label for the coach feed: "You: knight to f3", "Bot: bishop takes pawn on c4".
    * With `who` (e.g. "White"), the label names that player instead.
    */
+  /** A move in a few words: "knight to f3", "bishop takes pawn on c4", "castled". */
+  function movePhrase(m) {
+    var p = {
+      piece: pieceName(m.piece),
+      captured: m.captured ? pieceName(m.captured) : '',
+      to: m.to,
+      promo: m.promotion ? T(', becomes {apiece}', { apiece: aPiece(m.promotion) }) : ''
+    };
+    if (isCastle(m)) return T('castled');
+    if (isEnPassant(m)) return T('pawn takes pawn (en passant)');
+    if (m.captured) return T('{piece} takes {captured} on {to}{promo}', p);
+    return T('{piece} to {to}{promo}', p);
+  }
+
   function moveTitle(m, mine, who) {
     if (!m) return who || (mine ? T('You') : T('Bot'));
     var p = {
@@ -1066,6 +1080,7 @@
     lossGlyphs: lossGlyphs,
     moveAction: moveAction,
     moveTitle: moveTitle,
+    movePhrase: movePhrase,
     capitalize: capitalize,
     T: T,
     joinSentences: joinSentences,
