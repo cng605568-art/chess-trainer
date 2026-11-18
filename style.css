@@ -3306,3 +3306,289 @@ button.move-san:hover {
 #view-learn .status-card[data-tone="bad"] {
   box-shadow: inset 0 0 0 2px rgba(229, 83, 75, 0.5);
 }
+
+/* ------------------------------------------------------------------------ */
+/* Daily loop: level, XP, day streak, today's goal, badges, toasts          */
+/* ------------------------------------------------------------------------ */
+
+.level-badge {
+  font: 400 30px/1 "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", serif;
+}
+
+.xp-bar {
+  position: relative;
+  height: 8px;
+  margin: 5px 0 4px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #3a3a3a;
+}
+
+.xp-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: 4px;
+  background: var(--silver);
+  transition: width 0.5s ease;
+}
+
+.streak-flame {
+  color: #7a7a7a;
+}
+
+.streak.is-alive .streak-flame {
+  background: rgba(255, 170, 60, 0.16);
+  color: #ffad42;
+}
+
+.streak.is-today .streak-flame {
+  background: #ffad42;
+  color: #3b2300;
+}
+
+.today-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.today-reward {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.today-card.is-complete .today-reward {
+  color: var(--good);
+}
+
+.goal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.goal {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius-control);
+  background: var(--card);
+}
+
+.goal-check {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px #5a5a5a;
+  color: transparent;
+  font-weight: 800;
+}
+
+.goal.is-done .goal-check {
+  background: var(--good);
+  box-shadow: none;
+  color: #142808;
+}
+
+.goal-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.goal-label {
+  font: 700 0.95rem/1.25 var(--font-display);
+}
+
+.goal.is-done .goal-label {
+  color: var(--muted);
+}
+
+.goal-count {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.goal .btn {
+  flex: none;
+  min-height: 36px;
+  padding: 0 14px;
+}
+
+.next-lesson-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.next-lesson-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.next-lesson-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.next-lesson-sub {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.daily-card.is-solved .puzzle-card-title::after {
+  content: " ✓";
+  color: var(--good);
+}
+
+.badges-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.badge-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 4px 8px;
+  border-radius: var(--radius-control);
+  background: var(--card);
+  text-align: center;
+}
+
+.badge-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #2a2a2a;
+  color: #555;
+  font: 400 22px/1 "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", serif;
+}
+
+.badge-name {
+  color: var(--faint);
+  font: 700 0.74rem/1.2 var(--font-display);
+}
+
+.badge.is-earned .badge-icon {
+  background: var(--silver);
+  color: var(--silver-ink);
+  box-shadow: 0 0 0 3px rgba(220, 220, 220, 0.18);
+}
+
+.badge.is-earned .badge-name {
+  color: var(--ink);
+}
+
+.toast-stack {
+  position: fixed;
+  z-index: 90;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(420px, calc(100vw - 24px));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f2f2f2;
+  color: #1d1d1d;
+  box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.7);
+  animation: toast-in 0.25s ease both;
+}
+
+.toast.is-leaving {
+  animation: toast-out 0.25s ease both;
+}
+
+.toast-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #1d1d1d;
+  color: #f2f2f2;
+  font: 400 22px/1 "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", serif;
+}
+
+.toast-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.toast-title {
+  font: 800 0.98rem/1.2 var(--font-display);
+}
+
+.toast-sub {
+  color: #555;
+  font-size: 0.85rem;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes toast-out {
+  to { opacity: 0; transform: translateY(8px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .toast.is-leaving {
+    animation: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .toast-stack {
+    bottom: calc(86px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 370px) {
+  .badge-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

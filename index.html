@@ -153,22 +153,51 @@
         <div class="home-grid">
           <div class="home-col">
             <div class="home-profile">
-              <span class="avatar avatar-you" aria-hidden="true">♔</span>
+              <span class="avatar avatar-you level-badge" id="levelGlyph" aria-hidden="true">♙</span>
               <div class="home-profile-text">
-                <span class="home-name font-display">Your training</span>
-                <span class="home-sub" id="homeSub">Finish a game with no blunders to start a streak</span>
+                <span class="home-name font-display" id="levelName">Level 1: Pawn</span>
+                <div class="xp-bar" id="xpBar" role="progressbar" aria-label="Progress to the next level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="xp-fill" id="xpFill"></span></div>
+                <span class="home-sub" id="homeSub">0 of 100 XP to level 2</span>
               </div>
-              <div class="streak" title="Games in a row without a blunder">
-                <span class="streak-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.1-7.5 9.9-4.4-1.8-7.5-5.3-7.5-9.9V6z"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8" stroke-linecap="round"/></svg></span>
-                <span class="streak-num font-display" id="streakNum" aria-label="clean-game streak">0</span>
+              <div class="streak" id="dayStreak" title="Days in a row you practised">
+                <span class="streak-icon streak-flame" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12.5 2.5c.6 3.4 4.8 5.4 4.8 10.3a5.3 5.3 0 0 1-10.6 0c0-2.3 1-3.9 2.4-5.1.1 1.8.9 2.9 2.1 3.4-.3-3.3-.2-5.8 1.3-8.6z" fill="currentColor"/></svg></span>
+                <span class="streak-num font-display" id="streakNum" aria-label="day streak">0</span>
               </div>
             </div>
+
+            <section class="home-card today-card" aria-labelledby="todayTitle">
+              <div class="today-head">
+                <h2 class="home-card-title font-display" id="todayTitle">Today's goal</h2>
+                <span class="today-reward" id="todayReward">+50 XP</span>
+              </div>
+              <ul class="goal-list" id="goalList"></ul>
+            </section>
 
             <section class="home-card" aria-labelledby="playCardTitle">
               <h2 class="home-card-title font-display" id="playCardTitle">Play vs bot</h2>
               <div class="chip-row" id="levelChips" role="radiogroup" aria-label="Bot level"></div>
               <button type="button" class="btn btn-primary btn-big" id="btnHomeStart">Start game</button>
               <p class="home-note" id="homeNote"></p>
+            </section>
+
+            <section class="home-card puzzle-card daily-card" aria-labelledby="dailyTitle">
+              <div class="mini-board-wrap"><div id="dailyBoard" class="board board-mini" aria-hidden="true"></div></div>
+              <div class="puzzle-card-side">
+                <div class="puzzle-card-head">
+                  <h2 class="puzzle-card-title font-display" id="dailyTitle">Puzzle of the day</h2>
+                </div>
+                <p class="puzzle-card-text" id="dailyText">A new puzzle every day.</p>
+                <button type="button" class="btn btn-primary" id="btnDaily">Solve it</button>
+              </div>
+            </section>
+
+            <section class="home-card next-lesson-card" aria-labelledby="nextLessonTitle">
+              <span class="ln-card-icon" id="nextLessonIcon" aria-hidden="true">♜</span>
+              <div class="next-lesson-text">
+                <h2 class="next-lesson-title font-display" id="nextLessonTitle">Continue learning</h2>
+                <p class="next-lesson-sub" id="nextLessonText">Next lesson: The rook</p>
+              </div>
+              <button type="button" class="btn btn-ghost" id="btnNextLesson">Start</button>
             </section>
 
             <nav class="home-menu" aria-label="Shortcuts">
@@ -185,7 +214,7 @@
               <div class="puzzle-card-side">
                 <div class="puzzle-card-head">
                   <span class="puzzle-count" id="homePuzzleCount" aria-label="puzzles waiting">0</span>
-                  <h2 class="puzzle-card-title font-display" id="puzzleCardTitle">Your puzzles</h2>
+                  <h2 class="puzzle-card-title font-display" id="puzzleCardTitle">Your mistakes</h2>
                 </div>
                 <p class="puzzle-card-text" id="homePuzzleText">No puzzles yet.</p>
                 <button type="button" class="btn btn-ghost" id="btnHomePuzzle">Solve puzzle</button>
@@ -206,6 +235,11 @@
           </div>
 
           <div class="home-col">
+            <section class="home-card" aria-labelledby="badgesTitle">
+              <h2 class="home-card-title font-display badges-head" id="badgesTitle"><span>Badges</span><span class="ln-unit-count" id="badgeCount">0 of 16</span></h2>
+              <ul class="badge-grid" id="badgeGrid"></ul>
+            </section>
+
             <section class="home-card" aria-labelledby="historyTitle">
               <h2 class="home-card-title font-display" id="historyTitle">Game history</h2>
               <ul class="history-list" id="historyList"></ul>
@@ -225,6 +259,7 @@
                 <div class="stat-tile"><span class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.1-7.5 9.9-4.4-1.8-7.5-5.3-7.5-9.9V6z"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8" stroke-linecap="round"/></svg></span><span class="stat-value font-display" id="statSaves">0</span><span class="stat-label">Coach Guard saves</span></div>
                 <div class="stat-tile"><span class="stat-icon stat-text" aria-hidden="true">✓</span><span class="stat-value font-display" id="statSolved">0</span><span class="stat-label">Puzzles solved</span></div>
                 <div class="stat-tile"><span class="stat-icon stat-text" aria-hidden="true">??</span><span class="stat-value font-display" id="statWaiting">0</span><span class="stat-label">Puzzles waiting</span></div>
+                <div class="stat-tile"><span class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.1-7.5 9.9-4.4-1.8-7.5-5.3-7.5-9.9V6z"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8" stroke-linecap="round"/></svg></span><span class="stat-value font-display" id="statClean">0</span><span class="stat-label">Clean games in a row</span></div>
               </div>
             </section>
           </div>
@@ -652,6 +687,8 @@
       <button type="button" class="btn btn-ghost" id="guardPlay">Play Anyway</button>
     </div>
   </div>
+
+  <div class="toast-stack" id="toasts" aria-live="polite" aria-atomic="false"></div>
 
   <noscript>
     <div class="noscript">Second Look needs JavaScript to run the board and the Stockfish engine.</div>

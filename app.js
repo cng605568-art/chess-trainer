@@ -1280,6 +1280,7 @@
   var engine = new EngineClient(onEngineStatus);
   var board;
   var homeBoard;
+  var dailyBoard;
 
   function oppColor() { return C.opposite(S.playerColor); }
   function oppName() { return C.COLOR_NAMES[oppColor()]; }
@@ -1996,6 +1997,7 @@
           savedStats.saves++;
           saveStats(savedStats);
           C.BlunderBank.update(added.entry.id, { caught: true });
+          onProgress('guard-save');
           Sound.play('undo');
           syncBoard(true);
           renderMoveList();
@@ -2172,6 +2174,13 @@
     refreshControls();
     Sound.play(outcome.result === 'win' ? 'win' : outcome.result === 'loss' ? 'lose' : 'draw');
     recordGame(term, outcome.result);
+    onProgress('game', {
+      result: outcome.result,
+      how: term,
+      level: S.levelIndex,
+      blunders: Object.keys(S.review.quality).filter(function (k) { return S.review.quality[k].cls === 'blunder'; }).length,
+      moves: Math.ceil(S.game.history().length / 2)
+    });
     var summary = S.bankedThisGame > 0
       ? 'This game added ' + S.bankedThisGame + (S.bankedThisGame === 1 ? ' big mistake' : ' big mistakes') + ' to My Blunder Bank as puzzles. Solving them is the best way to stop making the same mistake again.'
       : 'No big mistakes this game. Nicely done!';
@@ -2808,6 +2817,7 @@
       this.phase = 'solved';
       Sound.play('correct');
       C.BlunderBank.recordAttempt(e.id, true);
+      onProgress('bank');
       this.feedback(alternative
         ? 'That works too! The computer liked one other move even more: to ' + bestWords(e) + '. This puzzle is cleared from your bank.'
         : "Solved! That's the move. This puzzle is cleared from your bank.", 'good');
@@ -2863,6 +2873,353 @@
       this.next();
     }
   };
+
+  /* ======================================================================== */
+  /* Daily loop: XP and levels, day streak, today's goal, badges              */
+  /* ======================================================================== */
+
+  var PROGRESS_KEY = 'chessTrainer.progress.v1';
+  var LEVEL_TITLES = ['Pawn', 'Pawn', 'Knight', 'Knight', 'Bishop', 'Bishop', 'Rook', 'Rook', 'Queen', 'Queen', 'King'];
+  var LEVEL_GLYPHS = ['♙', '♙', '♘', '♘', '♗', '♗', '♖', '♖', '♕', '♕', '♔'];
+
+  /** XP needed to reach level n: 0, 100, 250, 450, 700, 1000, ... */
+  function xpForLevel(n) {
+    return n <= 1 ? 0 : 25 * n * (n + 1) - 50;
+  }
+
+  function levelFor(xp) {
+    var n = 1;
+    while (xpForLevel(n + 1) <= xp) n++;
+    return n;
+  }
+
+  function levelTitle(n) {
+    return LEVEL_TITLES[Math.min(n, LEVEL_TITLES.length) - 1];
+  }
+
+  var GOALS = [
+    { id: 'games', label: 'Finish a game', need: 1, go: 'play', button: 'Play' },
+    { id: 'puzzles', label: 'Solve 3 puzzles', need: 3, go: 'puzzles', button: 'Puzzles' },
+    { id: 'lessons', label: 'Do a lesson step', need: 1, go: 'learn', button: 'Learn' }
+  ];
+
+  var BADGES = [
+    { id: 'first-game', icon: '♙', name: 'First game', desc: 'Finish your first game against a bot.' },
+    { id: 'first-win', icon: '♔', name: 'First win', desc: 'Beat a bot for the first time.' },
+    { id: 'checkmate', icon: '#', name: 'Checkmate!', desc: 'Win a game by checkmate.' },
+    { id: 'clean-game', icon: '✓', name: 'Clean game', desc: 'Play a game of 10+ moves with no big mistakes.' },
+    { id: 'beat-casual', icon: '♝', name: 'Beat Casual', desc: 'Beat the Casual bot (or a stronger one).' },
+    { id: 'beat-club', icon: '♜', name: 'Beat Club player', desc: 'Beat the Club player bot (or a stronger one).' },
+    { id: 'saved', icon: '↶', name: 'Second look', desc: 'Take back a move when Coach Guard warns you.' },
+    { id: 'fixed', icon: '??', name: 'Lesson learned', desc: 'Solve a puzzle from My Blunder Bank.' },
+    { id: 'pieces', icon: '♞', name: 'Know the pieces', desc: 'Finish every lesson in How the pieces move.' },
+    { id: 'graduate', icon: '★', name: 'Graduate', desc: 'Finish every lesson in Learn.' },
+    { id: 'puzzles-10', icon: '10', name: '10 puzzles', desc: 'Solve 10 puzzles.' },
+    { id: 'puzzles-50', icon: '50', name: '50 puzzles', desc: 'Solve 50 puzzles.' },
+    { id: 'rating-1000', icon: '♛', name: 'Puzzle 1000', desc: 'Reach a puzzle rating of 1000.' },
+    { id: 'goal', icon: '◎', name: 'Goal reached', desc: "Complete today's goal." },
+    { id: 'streak-3', icon: '3', name: '3-day streak', desc: 'Practise 3 days in a row.' },
+    { id: 'streak-7', icon: '7', name: '7-day streak', desc: 'Practise 7 days in a row.' }
+  ];
+
+  function dayKeyOffset(offset) {
+    var d = new Date();
+    d.setDate(d.getDate() + offset);
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  function hashString(s) {
+    var h = 2166136261;
+    for (var i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  var Progress = {
+    data: null,
+
+    load: function () {
+      var d = readJSON(PROGRESS_KEY, {}) || {};
+      this.data = {
+        xp: Math.max(0, parseInt(d.xp, 10) || 0),
+        days: d.days && typeof d.days === 'object' ? d.days : {},
+        streak: d.streak && typeof d.streak === 'object' ? { count: parseInt(d.streak.count, 10) || 0, best: parseInt(d.streak.best, 10) || 0, last: String(d.streak.last || '') } : { count: 0, best: 0, last: '' },
+        badges: d.badges && typeof d.badges === 'object' ? d.badges : {},
+        daily: d.daily && typeof d.daily === 'object' ? d.daily : {}
+      };
+    },
+
+    save: function () {
+      var keys = Object.keys(this.data.days).sort();
+      while (keys.length > 60) delete this.data.days[keys.shift()];
+      store.set(PROGRESS_KEY, JSON.stringify(this.data));
+    },
+
+    today: function () {
+      var k = todayKey();
+      var d = this.data.days[k];
+      if (!d || typeof d !== 'object') {
+        d = { games: 0, puzzles: 0, lessons: 0, goal: false };
+        this.data.days[k] = d;
+      }
+      return d;
+    },
+
+    /** Current streak: still alive if the last practice day was today or yesterday. */
+    streakNow: function () {
+      var s = this.data.streak;
+      return s.last === todayKey() || s.last === dayKeyOffset(-1) ? s.count : 0;
+    },
+
+    touchStreak: function () {
+      var s = this.data.streak;
+      var today = todayKey();
+      if (s.last === today) return;
+      s.count = s.last === dayKeyOffset(-1) ? s.count + 1 : 1;
+      s.last = today;
+      s.best = Math.max(s.best, s.count);
+      if (s.count >= 3) this.award('streak-3');
+      if (s.count >= 7) this.award('streak-7');
+    },
+
+    addXp: function (n) {
+      if (!n) return;
+      var before = levelFor(this.data.xp);
+      this.data.xp += n;
+      var after = levelFor(this.data.xp);
+      if (after > before) {
+        Sound.play('win');
+        toast(LEVEL_GLYPHS[Math.min(after, LEVEL_GLYPHS.length) - 1], 'Level ' + after + '!', "You're now a " + levelTitle(after) + '. Keep going!');
+      }
+    },
+
+    award: function (id) {
+      if (this.data.badges[id]) return;
+      var b = BADGES.filter(function (x) { return x.id === id; })[0];
+      if (!b) return;
+      this.data.badges[id] = Date.now();
+      Sound.play('notify');
+      toast(b.icon, 'Badge earned: ' + b.name, b.desc);
+    },
+
+    checkGoal: function () {
+      var d = this.today();
+      if (d.goal) return;
+      var met = GOALS.every(function (g) { return (d[g.id] || 0) >= g.need; });
+      if (!met) return;
+      d.goal = true;
+      this.addXp(50);
+      this.award('goal');
+      Sound.play('correct');
+      toast('◎', "Today's goal complete!", '+50 XP. Come back tomorrow to keep your streak going.');
+    },
+
+    event: function (type, info) {
+      info = info || {};
+      var d = this.today();
+      var counted = false;
+      if (type === 'game') {
+        d.games++;
+        counted = true;
+        var win = info.result === 'win';
+        this.addXp(20 + (win ? 20 : info.result === 'draw' ? 10 : 0) + (info.blunders === 0 && info.moves >= 10 ? 15 : 0));
+        this.award('first-game');
+        if (win) this.award('first-win');
+        if (win && info.how === 'checkmate') this.award('checkmate');
+        if (win && info.level >= 2) this.award('beat-casual');
+        if (win && info.level >= 3) this.award('beat-club');
+        if (info.blunders === 0 && info.moves >= 10) this.award('clean-game');
+      } else if (type === 'puzzle') {
+        if (info.solved) {
+          d.puzzles++;
+          counted = true;
+          this.addXp(info.hinted ? 5 : 10);
+          if (info.daily && this.data.daily.solved !== todayKey()) {
+            this.data.daily.solved = todayKey();
+            this.addXp(15);
+          }
+          if (info.total >= 10) this.award('puzzles-10');
+          if (info.total >= 50) this.award('puzzles-50');
+          if (info.rating >= 1000) this.award('rating-1000');
+        }
+      } else if (type === 'bank') {
+        d.puzzles++;
+        counted = true;
+        this.addXp(15);
+        this.award('fixed');
+      } else if (type === 'lesson-step' || type === 'lesson') {
+        d.lessons++;
+        counted = true;
+        this.addXp(type === 'lesson' ? (info.first ? 25 : 5) : 5);
+        if (type === 'lesson') {
+          var done = Learn.progress.done;
+          var pieces = (window.LESSONS || []).filter(function (u) { return u.id === 'pieces'; })[0];
+          if (pieces && pieces.lessons.every(function (l) { return done[l.id]; })) this.award('pieces');
+          if (allLessons().every(function (l) { return done[l.id]; })) this.award('graduate');
+        }
+      } else if (type === 'guard-save') {
+        this.award('saved');
+      }
+      if (counted) this.touchStreak();
+      this.checkGoal();
+      this.save();
+      if (!ui.viewHome.hidden) renderHome();
+    }
+  };
+
+  function onProgress(type, info) {
+    if (Progress.data) Progress.event(type, info);
+  }
+
+  function toast(icon, title, sub) {
+    var stack = $('toasts');
+    if (!stack) return;
+    var el = document.createElement('div');
+    el.className = 'toast';
+    var i = document.createElement('span');
+    i.className = 'toast-icon';
+    i.setAttribute('aria-hidden', 'true');
+    i.textContent = icon;
+    var text = document.createElement('span');
+    text.className = 'toast-text';
+    var t = document.createElement('span');
+    t.className = 'toast-title';
+    t.textContent = title;
+    text.appendChild(t);
+    if (sub) {
+      var s = document.createElement('span');
+      s.className = 'toast-sub';
+      s.textContent = sub;
+      text.appendChild(s);
+    }
+    el.appendChild(i);
+    el.appendChild(text);
+    stack.appendChild(el);
+    while (stack.children.length > 3) stack.removeChild(stack.firstChild);
+    setTimeout(function () {
+      el.classList.add('is-leaving');
+      setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 300);
+    }, 3800);
+  }
+
+  /** Today's puzzle: the same easy puzzle for everyone on a given day. */
+  function dailyPuzzle(data) {
+    var easy = data.filter(function (p) { return p.rating <= 1000; });
+    if (!easy.length) return null;
+    return easy[hashString('second-look:' + todayKey()) % easy.length];
+  }
+
+  function renderProgressHome() {
+    var d = Progress.data;
+    var lvl = levelFor(d.xp);
+    var from = xpForLevel(lvl);
+    var to = xpForLevel(lvl + 1);
+    var pct = Math.round(((d.xp - from) / (to - from)) * 100);
+    ui.levelName.textContent = 'Level ' + lvl + ': ' + levelTitle(lvl);
+    ui.levelGlyph.textContent = LEVEL_GLYPHS[Math.min(lvl, LEVEL_GLYPHS.length) - 1];
+    ui.xpFill.style.width = pct + '%';
+    ui.xpBar.setAttribute('aria-valuenow', String(pct));
+    ui.homeSub.textContent = (d.xp - from) + ' of ' + (to - from) + ' XP to level ' + (lvl + 1);
+
+    var streak = Progress.streakNow();
+    ui.streakNum.textContent = String(streak);
+    ui.dayStreak.classList.toggle('is-alive', streak > 0);
+    ui.dayStreak.classList.toggle('is-today', d.streak.last === todayKey());
+    ui.dayStreak.title = streak
+      ? streak + (streak === 1 ? ' day' : ' days') + ' in a row' + (d.streak.last === todayKey() ? '. You practised today.' : '. Practise today to keep it going!')
+      : 'Practise today to start a streak';
+
+    var today = d.days[todayKey()] || { games: 0, puzzles: 0, lessons: 0, goal: false };
+    ui.goalList.innerHTML = '';
+    GOALS.forEach(function (g) {
+      var have = Math.min(today[g.id] || 0, g.need);
+      var li = document.createElement('li');
+      li.className = 'goal' + (have >= g.need ? ' is-done' : '');
+      var check = document.createElement('span');
+      check.className = 'goal-check';
+      check.setAttribute('aria-hidden', 'true');
+      check.textContent = '✓';
+      var text = document.createElement('span');
+      text.className = 'goal-text';
+      var label = document.createElement('span');
+      label.className = 'goal-label';
+      label.textContent = g.label;
+      var count = document.createElement('span');
+      count.className = 'goal-count';
+      count.textContent = have >= g.need ? 'Done' : have + ' of ' + g.need;
+      text.appendChild(label);
+      text.appendChild(count);
+      li.appendChild(check);
+      li.appendChild(text);
+      if (have < g.need) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-ghost';
+        btn.dataset.goal = g.go;
+        btn.textContent = g.button;
+        li.appendChild(btn);
+      }
+      ui.goalList.appendChild(li);
+    });
+    ui.todayCard.classList.toggle('is-complete', !!today.goal);
+    ui.todayReward.textContent = today.goal ? 'Done! +50 XP' : '+50 XP';
+
+    var next = Learn.nextLesson();
+    if (next) {
+      ui.nextLessonIcon.textContent = next.icon;
+      ui.nextLessonTitle.textContent = Learn.doneCount() ? 'Continue learning' : 'Learn chess from zero';
+      ui.nextLessonText.textContent = 'Next lesson: ' + next.title;
+      ui.btnNextLesson.textContent = Learn.progress.step[next.id] ? 'Continue' : 'Start';
+    } else {
+      ui.nextLessonIcon.textContent = '★';
+      ui.nextLessonTitle.textContent = 'All lessons done!';
+      ui.nextLessonText.textContent = 'Practise any lesson again, or play the bots.';
+      ui.btnNextLesson.textContent = 'Lessons';
+    }
+
+    ui.badgeGrid.innerHTML = '';
+    var earned = 0;
+    BADGES.forEach(function (b) {
+      var has = !!d.badges[b.id];
+      if (has) earned++;
+      var li = document.createElement('li');
+      li.className = 'badge' + (has ? ' is-earned' : '');
+      li.title = b.name + ': ' + b.desc + (has ? ' (earned ' + relativeDay(d.badges[b.id]) + ')' : '');
+      li.setAttribute('aria-label', b.name + '. ' + b.desc + (has ? ' Earned.' : ' Not earned yet.'));
+      var icon = document.createElement('span');
+      icon.className = 'badge-icon';
+      icon.setAttribute('aria-hidden', 'true');
+      icon.textContent = b.icon;
+      var name = document.createElement('span');
+      name.className = 'badge-name';
+      name.textContent = b.name;
+      li.appendChild(icon);
+      li.appendChild(name);
+      ui.badgeGrid.appendChild(li);
+    });
+    ui.badgeCount.textContent = earned + ' of ' + BADGES.length;
+
+    Puzzles.load().then(function (data) {
+      if (!data) {
+        ui.dailyText.textContent = 'Connect to the internet to load puzzles.';
+        return;
+      }
+      var p = dailyPuzzle(data);
+      if (!p) return;
+      var g = new window.Chess(p.fen);
+      safeMove(g, uciToMove(p.moves[0]));
+      dailyBoard.setOrientation(g.turn());
+      dailyBoard.setFen(g.fen());
+      var solved = Progress.data.daily.solved === todayKey();
+      ui.dailyCard.classList.toggle('is-solved', solved);
+      ui.dailyText.textContent = solved
+        ? 'Solved! A new puzzle arrives tomorrow.'
+        : 'You play ' + C.COLOR_NAMES[g.turn()] + '. ' + (p.tags.indexOf('mate1') !== -1 ? 'Find checkmate in 1.' : p.tags.indexOf('mate2') !== -1 ? 'Find checkmate in 2.' : 'Find the best move.') + ' +25 XP';
+      ui.btnDaily.textContent = solved ? 'Solve again' : 'Solve it';
+    });
+  }
 
   /* ======================================================================== */
   /* Learn: lessons for complete beginners (content in lessons.js)            */
@@ -3369,11 +3726,11 @@
         this.progress.done[id] = Date.now();
         this.saveProgress();
         this.status('Lesson complete!', text, 'good', 'over');
-        if (typeof onProgress === 'function') onProgress('lesson', { id: id, first: first });
+        onProgress('lesson', { id: id, first: first });
       } else {
         this.saveProgress();
         this.status('Well done!', text, 'good', 'over');
-        if (typeof onProgress === 'function') onProgress('lesson-step', { id: id });
+        onProgress('lesson-step', { id: id });
       }
       this.renderDots();
       this.renderCount();
@@ -3479,6 +3836,8 @@
     phase: 'idle', // idle | loading | intro | solving | wrong | solved | revealed | error
     failed: false,
     hinted: false,
+    daily: false,
+    pendingDaily: false,
     epoch: 0,
     timer: null,
     stats: null,
@@ -3613,6 +3972,7 @@
     onShow: function () {
       var self = this;
       this.renderStats();
+      if (this.pendingDaily) return;
       if (this.cur && this.phase !== 'error') return;
       this.load().then(function (d) { if (d && !self.cur) self.next(); });
     },
@@ -3638,6 +3998,19 @@
       return choices[Math.floor(Math.random() * choices.length)] || null;
     },
 
+    /** Open today's puzzle (the same one for everyone today). */
+    openDaily: function () {
+      var self = this;
+      this.pendingDaily = true;
+      showTab('puzzles');
+      this.load().then(function (d) {
+        self.pendingDaily = false;
+        var p = d && dailyPuzzle(d);
+        if (p) self.open(p, false, true);
+        else if (d && !self.cur) self.next();
+      });
+    },
+
     next: function () {
       var self = this;
       this.load().then(function (d) {
@@ -3647,7 +4020,7 @@
       });
     },
 
-    open: function (p, retry) {
+    open: function (p, retry, daily) {
       var self = this;
       clearTimeout(this.timer);
       this.epoch++;
@@ -3657,13 +4030,14 @@
       if (!retry) {
         this.failed = false;
         this.hinted = false;
+        this.daily = !!daily;
       }
       this.game = new window.Chess(p.fen);
       this.color = C.opposite(this.game.turn());
       this.phase = 'intro';
       var mainTag = p.tags.indexOf('mate1') !== -1 ? 'mate1' : p.tags.indexOf('mate2') !== -1 ? 'mate2' : p.tags[0];
       var theme = this.stats.theme === 'mixed' ? puzzleTheme(mainTag) : puzzleTheme(this.stats.theme);
-      $('pzTitle').textContent = theme.title;
+      $('pzTitle').textContent = this.daily ? 'Puzzle of the day' : theme.title;
       $('pzSide').textContent = '(you are ' + C.COLOR_NAMES[this.color] + ')';
       $('pzTask').textContent = p.tags.indexOf('mate1') !== -1 ? 'Find checkmate in 1 move'
         : p.tags.indexOf('mate2') !== -1 ? 'Find checkmate in 2 moves'
@@ -3801,7 +4175,7 @@
       this.status(this.failed ? 'Solved on another try.' : 'Solved!', 'over', this.explain(mv) + change, 'good');
       this.setButtons();
       this.renderStats();
-      if (typeof onProgress === 'function') onProgress('puzzle', { solved: !this.failed, rating: this.stats.rating });
+      onProgress('puzzle', { solved: !this.failed, hinted: this.hinted, daily: this.daily, total: this.stats.solved, rating: this.stats.rating });
     },
 
     hint: function () {
@@ -3983,12 +4357,10 @@
     var bank = C.BlunderBank.list();
     var bankStats = C.BlunderBank.stats();
 
-    var streak = 0;
-    for (var i = 0; i < games.length && games[i].blunders === 0; i++) streak++;
-    ui.streakNum.textContent = String(streak);
-    ui.homeSub.textContent = streak > 0
-      ? streak + (streak === 1 ? ' clean game in a row' : ' clean games in a row')
-      : 'Finish a game with no blunders to start a streak';
+    var clean = 0;
+    for (var i = 0; i < games.length && games[i].blunders === 0; i++) clean++;
+    ui.statClean.textContent = String(clean);
+    renderProgressHome();
 
     renderLevelChips();
     var colour = { w: 'White', b: 'Black', random: 'a random colour' }[S.colorChoice] || 'White';
@@ -4204,6 +4576,24 @@
       btnSummaryBank: $('btnSummaryBank'),
       btnSummaryReview: $('btnSummaryReview'),
       installCard: $('installCard'),
+      levelName: $('levelName'),
+      levelGlyph: $('levelGlyph'),
+      xpFill: $('xpFill'),
+      xpBar: $('xpBar'),
+      dayStreak: $('dayStreak'),
+      goalList: $('goalList'),
+      todayCard: document.querySelector('.today-card'),
+      todayReward: $('todayReward'),
+      nextLessonIcon: $('nextLessonIcon'),
+      nextLessonTitle: $('nextLessonTitle'),
+      nextLessonText: $('nextLessonText'),
+      btnNextLesson: $('btnNextLesson'),
+      badgeGrid: $('badgeGrid'),
+      badgeCount: $('badgeCount'),
+      dailyCard: document.querySelector('.daily-card'),
+      dailyText: $('dailyText'),
+      btnDaily: $('btnDaily'),
+      statClean: $('statClean'),
       installText: $('installText'),
       btnInstall: $('btnInstall'),
       btnInstallLater: $('btnInstallLater')
@@ -4220,6 +4610,7 @@
       onMove: function (from, to) { onPlayerMove(from, to); }
     });
     homeBoard = new BoardView($('homeBoard'), {});
+    dailyBoard = new BoardView($('dailyBoard'), {});
 
     renderLevelCards();
     ui.levelCards.addEventListener('click', function (e) {
@@ -4447,6 +4838,18 @@
       }
     });
     ui.btnHistoryPlay.addEventListener('click', function () { goToPlay(); });
+    ui.goalList.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-goal]');
+      if (!b) return;
+      if (b.dataset.goal === 'play') goToPlay();
+      else showTab(b.dataset.goal);
+    });
+    ui.btnNextLesson.addEventListener('click', function () {
+      var next = Learn.nextLesson();
+      showTab('learn');
+      if (next) Learn.openLesson(next.id);
+    });
+    ui.btnDaily.addEventListener('click', function () { Puzzles.openDaily(); });
     Array.prototype.forEach.call(document.querySelectorAll('[data-goto="play"]'), function (b) {
       b.addEventListener('click', function () { showTab('play'); });
     });
@@ -4458,6 +4861,7 @@
 
   function init() {
     loadSettings();
+    Progress.load();
     bindUI();
     Bank.init();
     Puzzles.init();
