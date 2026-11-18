@@ -1264,6 +1264,7 @@
     timeChoice: 'none',
     closePromotion: null,
     lastSaveStamp: 0,
+    installSnoozedUntil: 0,
     boardTheme: 'green',
     homeLevel: 2,
     boardThemeChosen: false,
@@ -1291,6 +1292,7 @@
       if (typeof s.levelIndex === 'number' && s.levelIndex >= 0 && s.levelIndex < LEVELS.length) S.levelIndex = s.levelIndex;
       if (s.colorChoice === 'w' || s.colorChoice === 'b' || s.colorChoice === 'random') S.colorChoice = s.colorChoice;
       if (typeof s.soundOn === 'boolean') S.soundOn = s.soundOn;
+      if (typeof s.installSnoozedUntil === 'number') S.installSnoozedUntil = s.installSnoozedUntil;
       if (typeof s.timeChoice === 'string' && Object.prototype.hasOwnProperty.call(TIME_CONTROLS, s.timeChoice)) S.timeChoice = s.timeChoice;
       if (s.boardThemeChosen === true && (s.boardTheme === 'grey' || s.boardTheme === 'green' || s.boardTheme === 'brown')) {
         S.boardTheme = s.boardTheme;
@@ -1309,6 +1311,7 @@
       colorChoice: S.colorChoice,
       soundOn: S.soundOn,
       timeChoice: S.timeChoice,
+      installSnoozedUntil: S.installSnoozedUntil,
       boardTheme: S.boardTheme,
       boardThemeChosen: S.boardThemeChosen
     }));
@@ -3026,6 +3029,75 @@
   }
 
   /* ======================================================================== */
+  /* Install as an app (PWA)                                                  */
+  /* ======================================================================== */
+
+  var installPrompt = null;
+
+  function isStandalone() {
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  }
+
+  function isIOS() {
+    var ua = navigator.userAgent || '';
+    return /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
+  function renderInstallCard() {
+    if (!ui.installCard) return;
+    var snoozed = Date.now() < S.installSnoozedUntil;
+    if (isStandalone() || snoozed) {
+      ui.installCard.hidden = true;
+      return;
+    }
+    if (installPrompt) {
+      ui.installText.textContent = 'Add Second Look to your home screen. It opens full screen and the bot works without internet.';
+      ui.btnInstall.hidden = false;
+      ui.installCard.hidden = false;
+    } else if (isIOS()) {
+      ui.installText.textContent = 'On iPhone or iPad: tap the Share button at the bottom of Safari, then choose "Add to Home Screen".';
+      ui.btnInstall.hidden = true;
+      ui.installCard.hidden = false;
+    } else {
+      ui.installCard.hidden = true;
+    }
+  }
+
+  function setupInstall() {
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      installPrompt = e;
+      renderInstallCard();
+    });
+    window.addEventListener('appinstalled', function () {
+      installPrompt = null;
+      renderInstallCard();
+    });
+    ui.btnInstall.addEventListener('click', function () {
+      if (!installPrompt) return;
+      var p = installPrompt;
+      installPrompt = null;
+      p.prompt();
+      Promise.resolve(p.userChoice).then(renderInstallCard, renderInstallCard);
+    });
+    ui.btnInstallLater.addEventListener('click', function () {
+      S.installSnoozedUntil = Date.now() + 14 * 86400000;
+      saveSettings();
+      renderInstallCard();
+    });
+    renderInstallCard();
+
+    var secure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if ('serviceWorker' in navigator && secure) {
+      var register = function () {
+        navigator.serviceWorker.register('./sw.js').catch(function () { /* the site works without it */ });
+      };
+      if (document.readyState === 'complete') register();
+      else window.addEventListener('load', register);
+    }
+  }
+
+  /* ======================================================================== */
   /* Wiring                                                                   */
   /* ======================================================================== */
 
@@ -3108,7 +3180,11 @@
       summaryLine: $('summaryLine'),
       evalGraph: $('evalGraph'),
       btnSummaryBank: $('btnSummaryBank'),
-      btnSummaryReview: $('btnSummaryReview')
+      btnSummaryReview: $('btnSummaryReview'),
+      installCard: $('installCard'),
+      installText: $('installText'),
+      btnInstall: $('btnInstall'),
+      btnInstallLater: $('btnInstallLater')
     };
 
     board = new BoardView($('board'), {
@@ -3360,6 +3436,7 @@
     loadSettings();
     bindUI();
     Bank.init();
+    setupInstall();
     updateBankBadge();
     engine.start();
     S.homeLevel = S.levelIndex;

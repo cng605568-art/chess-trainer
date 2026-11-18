@@ -5,7 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Second Look: chess trainer with a live coach</title>
   <meta name="description" content="Play Stockfish with a coach that stops your blunders before they happen, explains every move in plain English, and turns your mistakes into puzzles.">
-  <meta name="theme-color" content="#262626">
+  <meta name="theme-color" content="#202020">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Second Look">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23d9d9d9'/%3E%3Ctext x='32' y='48' font-size='44' text-anchor='middle' fill='%23262626'%3E%E2%99%9E%3C/text%3E%3C/svg%3E">
 
   <!-- Fonts: Montserrat for headings, Atkinson Hyperlegible for body text -->
@@ -173,6 +179,18 @@
                 </div>
                 <p class="puzzle-card-text" id="homePuzzleText">No puzzles yet.</p>
                 <button type="button" class="btn btn-ghost" id="btnHomePuzzle">Solve puzzle</button>
+              </div>
+            </section>
+
+            <section class="home-card install-card" id="installCard" aria-labelledby="installTitle" hidden>
+              <img class="install-icon" src="/icons/icon-192.png" alt="" width="56" height="56">
+              <div class="install-text">
+                <h2 class="install-title font-display" id="installTitle">Get the app</h2>
+                <p class="install-sub" id="installText">Add Second Look to your home screen. It opens full screen and the bot works without internet.</p>
+                <div class="install-actions">
+                  <button type="button" class="btn btn-primary" id="btnInstall">Install app</button>
+                  <button type="button" class="btn btn-quiet" id="btnInstallLater">Not now</button>
+                </div>
               </div>
             </section>
           </div>
