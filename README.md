@@ -35,7 +35,7 @@ Then open `http://localhost:3000` (or `:8000`).
 
 ## Layout
 
-A sidebar on the left switches between **Home**, **Learn**, **Play**, **Puzzles**, **Blunder Bank** and **Settings**, with a language picker at the bottom. The board sits in the middle with player bars above and below it. The right panel has three tabs: **Game** (status, controls, game summary, coach notes, moves), **New game** (choose your colour and time limit, then pick a bot from six cards) and **Settings** (Coach Guard, evaluation bar, sounds, board colour). On phones the sidebar turns into a slide-out menu behind the ☰ button, the top bar gets quick buttons for the Blunder Bank and sound, and the site opens on **Home**: a Play card with level chips and a big Start game button, shortcut buttons, a puzzle card showing your newest saved blunder, your game history, and stats (games, wins, Coach Guard saves, puzzles solved and waiting). Finishing games without a blunder builds a clean-game streak. During a game on a phone, the board runs edge to edge between the two player bars, the panel tabs become an icon bar under the board, and the step buttons stay pinned to the bottom of the screen. The evaluation bar is left out on phones to keep the board full width; the score still shows next to the status.
+A sidebar on the left switches between **Home**, **Learn**, **Play**, **Puzzles**, **Analyze**, **Blunder Bank** and **Settings**, with a language picker at the bottom. The board sits in the middle with player bars above and below it. The right panel has three tabs: **Game** (status, controls, game summary, coach notes, moves), **New game** (choose your colour and time limit, then pick a bot from six cards) and **Settings** (Coach Guard, evaluation bar, sounds, board colour). On phones the sidebar turns into a slide-out menu behind the ☰ button, the top bar gets quick buttons for the Blunder Bank and sound, and the site opens on **Home**: a Play card with level chips and a big Start game button, shortcut buttons, a puzzle card showing your newest saved blunder, your game history, and stats (games, wins, Coach Guard saves, puzzles solved and waiting). Finishing games without a blunder builds a clean-game streak. During a game on a phone, the board runs edge to edge between the two player bars, the panel tabs become an icon bar under the board, and the step buttons stay pinned to the bottom of the screen. The evaluation bar is left out on phones to keep the board full width; the score still shows next to the status.
 
 ## What's inside
 
@@ -44,9 +44,10 @@ A sidebar on the left switches between **Home**, **Learn**, **Play**, **Puzzles*
 | `index.html` | Sidebar, Home, Learn, Play, Puzzles and Blunder Bank views, right panel with Game / New game / Settings tabs, promotion, Coach Guard and transfer-code dialogs, share and search tags |
 | `style.css` | Grey theme, board colours, highlights, danger pulse, menu cards, responsive rules |
 | `stockfish-worker.js` | Web Worker that loads Stockfish 10 from cdnjs (jsDelivr as backup) and answers search requests as JSON. Falls back to a small built-in engine if both CDNs are blocked |
+| `chess960.js` | Chess960 on top of chess.js: random starts, castling with rook-file rights (Shredder-FEN), and the chess.js methods the app uses |
 | `coach.js` | Plain-English move explanations (hanging pieces, checks, center control, castling, evaluation swings) and the Blunder Bank storage |
 | `app.js` | Board rendering and piece animation, click or drag to move, pawn promotion, sound effects, the game loop, Coach Guard, replay, game summary, lessons, puzzles, XP and badges, sharing, backups |
-| `lessons.js` | The 21 lessons in Learn (positions, goals and text) |
+| `lessons.js` | The 38 lessons in Learn, including the six opening drills (positions, goals and text) |
 | `puzzles.json` | 1,366 beginner puzzles from the Lichess puzzle database |
 | `i18n.js` | Picks the language and translates text (`T('English text')`) |
 | `lang.js` | Bahasa Melayu and Chinese, as rows of `[English, Malay, Chinese]`. Only loaded when one of them is chosen |
@@ -57,7 +58,9 @@ A sidebar on the left switches between **Home**, **Learn**, **Play**, **Puzzles*
 
 ## How the features work
 
-**Learn.** 21 lessons in six units: how the pieces move, check and checkmate, special moves, winning pieces, basic checkmates and how to start a game. Each lesson is a few steps on a real board: collect stars with one piece, find a move that does something (give check, block, castle, promote), or play a short ending against the bot. Wrong moves get a hint about what to try instead, and progress is saved per lesson.
+**Learn.** 38 lessons in eleven units: how the pieces move, check and checkmate, special moves, winning pieces, basic checkmates, how to start a game, openings, more tactics (skewers, discovered attacks, safe captures), checkmate patterns (smothered mate, rook and knight, the two-rook ladder), traps and defence (stopping the four-move mate, fool's mate, giving your king air) and endgames (the square of the pawn, walking a pawn home). Each lesson is a few steps on a real board: collect stars with one piece, find a move that does something (give check, block, castle, promote, stop a mate), or play a short ending against the bot. Wrong moves get a hint about what to try instead, and progress is saved per lesson. The speaker button reads each step out loud.
+
+**Openings.** Six openings to learn move by move: the Italian Game, Scotch Game, London System and Queen's Gambit as White, and the Caro-Kann and Queen's Gambit Declined as Black. First every move comes with an instruction and the reason for it, and the bot plays the other side's book moves. Then you play the whole line again from memory; after two misses a green arrow shows the move.
 
 **Puzzles.** Beginner puzzles from real games on Lichess: checkmate in 1 and 2, free pieces, forks, pins, back-row mates and pawn promotion. The bot plays the first move, then you find the answer. Pick a type or mix them. Your puzzle rating starts at 600 and moves like a chess rating: up when you solve one, down when you miss it.
 
@@ -83,11 +86,20 @@ A sidebar on the left switches between **Home**, **Learn**, **Play**, **Puzzles*
 
 **Premoves.** While the bot is thinking you can already make your next move. It shows in red on the board and plays the moment the bot has moved, if it is still legal. Tap an empty square (or right-click) to cancel it. Handy in Bullet.
 
+**Bot ladder.** Home has a ladder of all six bots. Beat a bot and the next one unlocks. A win earns three stars with no blunders and no take-backs, two if you needed a take-back or Coach Guard, and one if a blunder slipped through.
+
+**Analysis board.** The Analyze tab is a free board: move pieces for both sides and Stockfish shows the best move as an arrow, the top lines and the score in words. Set up any position with the piece palette or paste a FEN, step through the moves, flip the board, copy the FEN, or start a game against the bot from the position. After a game, **Analyze this game** opens it here.
+
+**Review your games.** Under Analyze → My games, type a Chess.com or Lichess username to list recent games, or choose Paste a game for a PGN. Pick one and Stockfish checks every move: you get a graph of who was ahead, your inaccuracies, mistakes and blunders, and each key moment opens on the analysis board. Lichess allows this from any website; if Chess.com can't be reached from the browser, paste the PGN from the game's Share button instead.
+
+**Read aloud.** The speaker buttons in Learn and in the coach notes read the text out loud with the browser's own voices, in English, Malay or Chinese.
+
 **Game modes.** Under New game (or the Ways to play tiles on Home):
 - **Standard**: normal chess against a bot.
 - **Head start**: the bot starts without its queen, a rook or a knight.
 - **King of the Hill**: checkmate wins, and so does getting your king to one of the four centre squares (outlined on the board). The bot plays normal chess, but it always takes a winning king move and never lets you reach the centre in one move. Coach Guard warns before a move that lets the bot's king reach the centre.
 - **Three-check**: checkmate wins, and so does giving three checks. Dots next to each name count them. The bot gives the third check when it can and avoids allowing yours.
+- **Chess960**: the back row starts in one of 960 shuffled orders, the same for both sides (bishops on opposite colours, king between the rooks). Castle by moving your king onto your rook, or straight to g1 or c1 when that isn't also a normal king move; the king ends on the g- or c-file and the rook beside it, as in normal chess. Stockfish plays it with `UCI_Chess960` on, and the game is saved with Shredder-FEN castling rights (`HAha`).
 - **Play a friend**: two people on one device. The board turns after each move (switch it off under New game), the clocks run for both, and Take back undoes one move. No coach or Blunder Bank in these games.
 
 Blunders in King of the Hill and Three-check games aren't saved to the Blunder Bank, since its puzzles are normal chess.
@@ -140,6 +152,8 @@ Use sounds you are allowed to publish, since files in a public repo can be downl
 - Board colours: the `body[data-board="…"]` rules at the top of `style.css`.
 - Wording in Malay or Chinese: edit the row in `lang.js` (the English in the first column has to stay exactly as it is in the code). After changing any English text, run `node tools/check-lang.js` to see what still needs translating.
 - Lessons: `lessons.js`. Puzzles: `puzzles.json` (`[id, FEN, "moves", rating, "themes"]`).
+
+**Visitor stats.** The site loads Vercel Web Analytics (`/_vercel/insights/script.js`): page views and countries, with no cookies and nothing personal. Turn it on once in the Vercel dashboard under the project's **Analytics** tab; until then the script does nothing.
 
 ## Credits and licenses
 

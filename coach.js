@@ -443,7 +443,7 @@
       piece: pieceName(m.piece),
       captured: m.captured ? pieceName(m.captured) : '',
       from: m.from,
-      to: m.to,
+      to: m.kingTo || m.to, // Chess960 castling is written king-onto-rook; say where the king lands
       promo: m.promotion ? T(', turning it into {apiece}', { apiece: aPiece(m.promotion) }) : ''
     };
     if (isCastle(m)) {

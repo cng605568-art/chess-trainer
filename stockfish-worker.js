@@ -120,6 +120,7 @@ var uciRetryTimer = null;
 var uciDeadlineTimer = null;
 var currentSkill = null;
 var currentMultiPV = 1;
+var currentChess960 = false;
 
 function clampInt(v, lo, hi, fallback) {
   var n = parseInt(v, 10);
@@ -166,7 +167,8 @@ nativeAddEventListener('message', function (event) {
         depth: msg.depth ? clampInt(msg.depth, 1, 40, 12) : 0,
         movetime: msg.movetime ? clampInt(msg.movetime, 20, 60000, 1000) : 0,
         skill: clampInt(msg.skill, 0, 20, 20),
-        multipv: clampInt(msg.multipv, 1, 5, 1)
+        multipv: clampInt(msg.multipv, 1, 5, 1),
+        chess960: !!msg.chess960
       });
       break;
     case 'newGame':
@@ -284,6 +286,11 @@ function runStockfishJob(job) {
   if (job.multipv !== currentMultiPV) {
     engineCommand('setoption name MultiPV value ' + job.multipv);
     currentMultiPV = job.multipv;
+  }
+  if (job.chess960 !== currentChess960) {
+    // Chess960: castling rights are rook files and castling is written king-takes-rook.
+    engineCommand('setoption name UCI_Chess960 value ' + (job.chess960 ? 'true' : 'false'));
+    currentChess960 = job.chess960;
   }
   engineCommand('position fen ' + job.fen);
   var go = 'go';
@@ -556,6 +563,8 @@ var Lite = (function () {
   }
 
   function search(job) {
+    // The lite engine plays Chess960 without castling: chess.js can't read rook-file rights.
+    if (job.chess960) job.fen = job.fen.replace(/^(\S+ \S+) \S+/, '$1 -');
     game = new Chess(job.fen);
     var rootMoves = game.moves({ verbose: true });
     if (rootMoves.length === 0) {

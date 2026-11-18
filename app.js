@@ -84,6 +84,7 @@
     odds: { name: 'Head start', sub: 'The bot gives up a piece', help: 'The bot starts without one of its pieces, so you begin ahead. A friendly way to win your first games.' },
     koth: { name: 'King of the Hill', sub: 'King to the centre wins', help: 'Normal chess with one extra way to win: get your king to one of the four centre squares (d4, e4, d5 or e5). Checkmate still wins too.' },
     threecheck: { name: 'Three-check', sub: 'Give 3 checks to win', help: "Normal chess with one extra way to win: put the other king in check three times. Checkmate still wins too." },
+    c960: { name: 'Chess960', sub: 'Shuffled back row', help: 'The pieces on the back row start in a shuffled order, the same for both sides, so there are no openings to remember. Every other rule is the same. To castle, move your king onto your rook.' },
     friend: { name: 'Play a friend', sub: 'Two players, one device', help: 'Two people take turns on this device. Turn on Turn the board to see your own pieces at the bottom on your turn.' }
   };
   var ODDS = {
@@ -128,6 +129,17 @@
     isDraw: function (g) { return g.isDraw ? g.isDraw() : g.in_draw(); },
     isGameOver: function (g) { return g.isGameOver ? g.isGameOver() : g.game_over(); }
   };
+
+  /** A game from a FEN: Chess960 positions (castling rights as rook files) get the Chess960 wrapper. */
+  function makeGame(fen) {
+    if (window.Chess960) return window.Chess960.makeGame(fen);
+    return fen ? new window.Chess(fen) : new window.Chess();
+  }
+
+  /** The FEN to save or restart from. Keeps Chess960 castling rights, which fen() leaves out. */
+  function fullFen(game) {
+    return game.fen960 ? game.fen960() : game.fen();
+  }
 
   function safeMove(game, move) {
     try {
@@ -177,9 +189,10 @@
 
   function legalTargets(game, from) {
     var seen = {};
-    return game.moves({ square: from, verbose: true })
-      .map(function (m) { return m.to; })
-      .filter(function (sq) { if (seen[sq]) return false; seen[sq] = true; return true; });
+    var list = game.moves({ square: from, verbose: true }).map(function (m) { return m.to; });
+    // Chess960: the king can also be dropped on g1 or c1 to castle.
+    if (game.extraTargets) list = list.concat(game.extraTargets(from));
+    return list.filter(function (sq) { if (seen[sq]) return false; seen[sq] = true; return true; });
   }
 
   function checkSquare(game) {
@@ -1101,7 +1114,8 @@
         depth: params.depth || 0,
         movetime: params.movetime || 0,
         skill: params.skill === undefined ? 20 : params.skill,
-        multipv: params.multipv || 1
+        multipv: params.multipv || 1,
+        chess960: !!params.chess960
       };
       self.pending.set(id, { job: job, resolve: resolve, sentTo: null, timer: null });
       self._send(id);
@@ -2176,8 +2190,8 @@
     S.lastStars = 0;
     if (S.mode === 'friend') S.playerColor = opts.color || 'w';
     else S.playerColor = opts.color || (S.colorChoice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : S.colorChoice);
-    S.startFen = opts.fen || (S.mode === 'odds' ? oddsFen(S.playerColor, S.odds) : null);
-    S.game = S.startFen ? new window.Chess(S.startFen) : new window.Chess();
+    S.startFen = opts.fen || (S.mode === 'odds' ? oddsFen(S.playerColor, S.odds) : S.mode === 'c960' ? window.Chess960.randomFen() : null);
+    S.game = makeGame(S.startFen);
     S.gameId = makeId();
     if (S.mode === 'friend') S.playerColor = S.game.turn();
     S.orientation = S.mode === 'friend' && !S.autoFlip ? 'w' : S.playerColor;
@@ -2213,7 +2227,7 @@
       return;
     }
     var modeTips = modeIntro();
-    if (opts.retry || (S.startFen && S.mode !== 'odds')) {
+    if (opts.retry || (opts.fen && S.mode !== 'odds')) {
       var tipText = opts.retry && opts.retry.move
         ? T("Let's try that moment again. Last time you chose to {move}, which was {loss}. Take a second look: what can the bot do after your move?", { move: C.moveAction(opts.retry.move, true), loss: C.lossLike(opts.retry.drop || 0) })
         : T('Playing on from this position. You are {color}, against {bot}.', { color: C.colorName(S.playerColor), bot: botName(S.levelIndex) });
@@ -2251,9 +2265,14 @@
       text = T('King of the Hill: checkmate wins, and so does getting your king to one of the four centre squares (marked on the board). The bot can win the same way, so keep an eye on its king too.');
     } else if (S.mode === 'threecheck') {
       text = T('Three-check: checkmate wins, and so does putting the other king in check three times. The dots next to each name count the checks. Checks are easier to give than checkmate, so look for them on every move.');
+    } else if (S.mode === 'c960') {
+      text = C.joinSentences([
+        T('Chess960: the back row is shuffled, so think from move one. Bring out your pieces, take the centre and keep your king safe.'),
+        T('To castle, move your king onto your rook. The king ends on the g-file or c-file with the rook beside it, as in normal chess.')
+      ]);
     }
     var tc = TIME_CONTROLS[S.timeChoice] || TIME_CONTROLS.none;
-    var tips = text ? [{ tone: 'tip', icon: S.mode === 'koth' ? '⛰' : S.mode === 'threecheck' ? '+' : '♛', text: text }] : [];
+    var tips = text ? [{ tone: 'tip', icon: S.mode === 'koth' ? '⛰' : S.mode === 'threecheck' ? '+' : S.mode === 'c960' ? '⇄' : '♛', text: text }] : [];
     if (tc.kind === 'bullet') {
       tips.push({ tone: 'tip', icon: '⚡', text: T('Bullet: {time}. Tip: while the bot is thinking you can already make your next move (a premove). It plays the moment the bot has moved, if it is still allowed. Tap any empty square to cancel it.', { time: T(tc.phrase) }) });
     }
@@ -2319,7 +2338,7 @@
     if (!data.moves.length && !startFen) return false;
     var g;
     try {
-      g = startFen ? new window.Chess(startFen) : new window.Chess();
+      g = makeGame(startFen);
     } catch (e) {
       return false;
     }
@@ -2681,7 +2700,9 @@
     if (lvl.random > 0 && Math.random() < lvl.random) {
       uci = randomMoveUci(S.game);
     } else {
-      var r = await engine.search({ fen: fen, skill: lvl.skill, depth: lvl.depth, movetime: movetime, multipv: isVariant() ? 4 : 1 });
+      // Chess960: Stockfish gets the castling rights and answers castling as king-takes-rook (e1h1).
+      var c960 = !!S.game.fen960;
+      var r = await engine.search({ fen: c960 ? S.game.fen960() : fen, chess960: c960, skill: lvl.skill, depth: lvl.depth, movetime: movetime, multipv: isVariant() ? 4 : 1 });
       if (epoch !== S.epoch) return;
       uci = r && r.bestMove;
       lines = r && r.lines;
@@ -2973,7 +2994,7 @@
 
   function gameAtPly(ply) {
     var hist = S.game.history({ verbose: true });
-    var g = S.startFen ? new window.Chess(S.startFen) : new window.Chess();
+    var g = makeGame(S.startFen);
     for (var i = 0; i < ply && i < hist.length; i++) {
       var m = hist[i];
       safeMove(g, m.promotion ? { from: m.from, to: m.to, promotion: m.promotion } : { from: m.from, to: m.to });
@@ -3200,7 +3221,7 @@
     if (S.mode === 'threecheck') {
       S.game.history({ verbose: true }).slice(0, ply).forEach(function (m) { if (/[+#]$/.test(m.san)) cb[m.color]++; });
     }
-    newGame({ fen: g.fen(), color: isFriend() ? g.turn() : S.playerColor, retry: retry, mode: S.mode, odds: S.odds, checkBase: cb });
+    newGame({ fen: fullFen(g), color: isFriend() ? g.turn() : S.playerColor, retry: retry, mode: S.mode, odds: S.odds, checkBase: cb });
     showPane('game');
     if (isMobile()) ui.boardWrap.scrollIntoView({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
   }
@@ -4502,6 +4523,7 @@
       (window.LESSONS || []).forEach(function (unit) {
         var sec = document.createElement('section');
         sec.className = 'ln-unit';
+        sec.dataset.unit = unit.id;
         var h = document.createElement('h2');
         h.className = 'ln-unit-title';
         var title = document.createElement('span');
@@ -5962,13 +5984,13 @@
     if (kings.K !== 1 || kings.k !== 1) return T('Each side needs exactly one king.');
     if (pawnEdge) return T("Pawns can't stand on the first or last row.");
     var g;
-    try { g = new window.Chess(fen); } catch (e) { return T("That FEN doesn't look right."); }
+    try { g = makeGame(fen); } catch (e) { return T("That FEN doesn't look right."); }
     if (g.fen().split(' ')[0] !== fen.split(' ')[0]) return T("That FEN doesn't look right.");
     var parts = fen.split(' ');
     parts[1] = parts[1] === 'w' ? 'b' : 'w';
     parts[3] = '-';
     var flipped;
-    try { flipped = new window.Chess(parts.join(' ')); } catch (e) { flipped = null; }
+    try { flipped = makeGame(parts.join(' ')); } catch (e) { flipped = null; }
     if (flipped && ChessAPI.inCheck(flipped)) return T("The side that isn't moving can't be in check.");
     return null;
   }
@@ -6069,7 +6091,7 @@
       this.root = rootFen || START_FEN;
       this.moves = (moves || []).slice();
       if (this.editing) this.leaveSetup();
-      var g = new window.Chess(this.root);
+      var g = makeGame(this.root);
       this.orientation = g.turn();
       this.board.setOrientation(this.orientation);
       this.goTo(typeof ply === 'number' ? ply : this.moves.length);
@@ -6077,7 +6099,7 @@
 
     goTo: function (ply, quiet) {
       ply = Math.max(0, Math.min(this.moves.length, ply));
-      var g = new window.Chess(this.root);
+      var g = makeGame(this.root);
       var last = null;
       for (var i = 0; i < ply; i++) {
         last = safeMove(g, uciToMove(this.moves[i]));
@@ -6121,7 +6143,7 @@
     },
 
     playMove: function (m) {
-      var g = new window.Chess(this.game.fen());
+      var g = makeGame(fullFen(this.game));
       var mv = safeMove(g, m);
       if (!mv) {
         this.board.refresh();
@@ -6141,7 +6163,7 @@
     renderMoves: function () {
       var ol = $('azMoves');
       ol.innerHTML = '';
-      var g = new window.Chess(this.root);
+      var g = makeGame(this.root);
       var num = parseInt(this.root.split(' ')[5], 10) || 1;
       var li = null;
       for (var i = 0; i < this.moves.length; i++) {
@@ -6178,7 +6200,7 @@
       $('btnAzPrev').disabled = this.ply === 0;
       $('btnAzNext').disabled = this.ply >= this.moves.length;
       $('btnAzLast').disabled = this.ply >= this.moves.length;
-      $('azFen').value = this.game.fen();
+      $('azFen').value = fullFen(this.game);
       $('azSub').textContent = T('{color} to move', { color: C.colorName(this.game.turn()) });
       $('btnAzPlay').disabled = ChessAPI.isGameOver(this.game);
     },
@@ -6268,7 +6290,7 @@
       if (ChessAPI.isGameOver(g)) return;
       if (S.started && S.phase !== 'over' && S.game.history().length && !window.confirm(T('Start a new game? Your current game will end.'))) return;
       showTab('play');
-      newGame({ fen: g.fen(), color: g.turn(), mode: 'standard' });
+      newGame({ fen: fullFen(g), color: g.turn(), mode: g.fen960 ? 'c960' : 'standard' });
       showPane('game');
     },
 
@@ -6384,7 +6406,7 @@
         return;
       }
       this.leaveSetup();
-      this.load(new window.Chess(fen).fen(), [], 0);
+      this.load(fullFen(makeGame(fen)), [], 0);
     }
   };
 
@@ -7381,6 +7403,18 @@
         if (way === 'sprint' || way === 'survival') {
           showTab('puzzles');
           Puzzles.setMode(way);
+          return;
+        }
+        if (way === 'openings') {
+          showTab('learn');
+          if (Learn.phase !== 'list') Learn.showList();
+          var unit = document.querySelector('#lnUnits [data-unit="openings"]');
+          if (unit) unit.scrollIntoView({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+          return;
+        }
+        if (way === 'review') {
+          showTab('analyze');
+          Analyzer.showPane('games');
           return;
         }
         if (way === 'bullet' || way === 'blitz' || way === 'rapid') {
