@@ -2201,6 +2201,8 @@
     showPane('game');
     store.remove(GAME_KEY);
     var outcome = gameOutcome(term);
+    outcome.how = term;
+    S.lastOutcome = outcome;
     setStatus(outcome.status, 'over', 'Replay the game to see where it turned, or start a new one.');
     ui.evalChip.textContent = outcome.result === 'win' ? 'You won' : outcome.result === 'loss' ? 'Bot won' : 'Draw';
     refreshControls();
@@ -2496,6 +2498,164 @@
     newGame({ fen: g.fen(), color: S.playerColor, retry: retry });
     showPane('game');
     if (isMobile()) ui.boardWrap.scrollIntoView({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+  }
+
+  /* ======================================================================== */
+  /* Sharing a result                                                         */
+  /* ======================================================================== */
+
+  function loadImage(url) {
+    return new Promise(function (resolve) {
+      var img = new Image();
+      var done = false;
+      var timer = setTimeout(function () { if (!done) { done = true; resolve(null); } }, 2500);
+      img.crossOrigin = 'anonymous';
+      img.onload = function () { if (!done) { done = true; clearTimeout(timer); resolve(img); } };
+      img.onerror = function () { if (!done) { done = true; clearTimeout(timer); resolve(null); } };
+      img.src = url;
+    });
+  }
+
+  /** A square picture of the final board with the result. Resolves to a PNG blob or null. */
+  function makeShareImage(fen, orientation, title, sub, lastMove) {
+    var W = 1080;
+    var canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = W;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return Promise.resolve(null);
+    var styles = getComputedStyle(document.body);
+    var light = styles.getPropertyValue('--sq-light').trim() || '#ebecd0';
+    var dark = styles.getPropertyValue('--sq-dark').trim() || '#739552';
+    var urls = (window.PIECE_SET && window.PIECE_SET.urls) || {};
+    var keys = Object.keys(urls);
+
+    function draw(images) {
+      ctx.fillStyle = '#262626';
+      ctx.fillRect(0, 0, W, W);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#f2f2f2';
+      ctx.font = '800 62px Montserrat, system-ui, sans-serif';
+      ctx.fillText(title, W / 2, 104);
+      ctx.fillStyle = '#bdbdbd';
+      ctx.font = '700 32px "Atkinson Hyperlegible", system-ui, sans-serif';
+      ctx.fillText(sub, W / 2, 156);
+      var size = 760;
+      var x0 = (W - size) / 2;
+      var y0 = 196;
+      var sq = size / 8;
+      var board = C.parseFen(fen).board;
+      for (var row = 0; row < 8; row++) {
+        for (var col = 0; col < 8; col++) {
+          var rank = orientation === 'w' ? 7 - row : row;
+          var file = orientation === 'w' ? col : 7 - col;
+          var x = x0 + col * sq;
+          var y = y0 + row * sq;
+          ctx.fillStyle = (rank + file) % 2 === 0 ? dark : light;
+          ctx.fillRect(x, y, sq, sq);
+          var name = FILES.charAt(file) + (rank + 1);
+          if (lastMove && (lastMove.from === name || lastMove.to === name)) {
+            ctx.fillStyle = 'rgba(255, 255, 51, 0.5)';
+            ctx.fillRect(x, y, sq, sq);
+          }
+          var p = board[rank * 8 + file];
+          if (!p) continue;
+          var key = p.c + p.t.toUpperCase();
+          var img = images[key];
+          if (img) {
+            ctx.drawImage(img, x, y, sq, sq);
+          } else {
+            ctx.font = Math.round(sq * 0.82) + 'px "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", serif';
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = p.c === 'w' ? '#1a1a1a' : '#000';
+            ctx.fillStyle = p.c === 'w' ? '#fbfbfb' : '#1c1c1c';
+            var glyph = C.GLYPHS[p.t];
+            ctx.strokeText(glyph, x + sq / 2, y + sq * 0.8);
+            ctx.fillText(glyph, x + sq / 2, y + sq * 0.8);
+          }
+        }
+      }
+      ctx.fillStyle = '#f2f2f2';
+      ctx.font = '800 40px Montserrat, system-ui, sans-serif';
+      ctx.fillText('♞ Second Look', W / 2, 1022);
+      ctx.fillStyle = '#9a9a9a';
+      ctx.font = '700 26px "Atkinson Hyperlegible", system-ui, sans-serif';
+      ctx.fillText('Learn chess free at ' + location.host, W / 2, 1060);
+    }
+
+    function toBlob() {
+      return new Promise(function (resolve) {
+        try {
+          canvas.toBlob(function (b) { resolve(b); }, 'image/png');
+        } catch (e) {
+          resolve(undefined); // canvas tainted by the piece pictures
+        }
+      });
+    }
+
+    return Promise.all(keys.map(function (k) { return loadImage(urls[k]); })).then(function (imgs) {
+      var images = {};
+      keys.forEach(function (k, i) { if (imgs[i]) images[k] = imgs[i]; });
+      draw(images);
+      return toBlob().then(function (blob) {
+        if (blob !== undefined) return blob;
+        draw({});
+        return toBlob().then(function (b) { return b || null; });
+      });
+    });
+  }
+
+  function downloadBlob(blob, name) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+
+  function copyText(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).catch(function () {});
+    } catch (e) {
+      /* no clipboard */
+    }
+    return Promise.resolve();
+  }
+
+  function shareResult() {
+    var o = S.lastOutcome;
+    if (S.phase !== 'over' || !o) return;
+    var lvl = LEVELS[S.levelIndex].name;
+    var moves = Math.ceil(S.game.history().length / 2);
+    var title = o.result === 'win' ? 'I beat the ' + lvl + ' bot!' : o.result === 'draw' ? 'A draw with the ' + lvl + ' bot' : 'I played the ' + lvl + ' bot';
+    var sub = o.summary + ' ' + moves + (moves === 1 ? ' move.' : ' moves.');
+    var text = title + ' Learn chess free on Second Look, with a coach that stops your blunders.';
+    var url = location.origin + '/';
+    var hist = S.game.history({ verbose: true });
+    var last = hist[hist.length - 1];
+    ui.btnShare.disabled = true;
+    makeShareImage(S.game.fen(), S.orientation, title, sub, last ? { from: last.from, to: last.to } : null)
+      .then(function (blob) {
+        var file = null;
+        try {
+          file = blob ? new File([blob], 'second-look-result.png', { type: 'image/png' }) : null;
+        } catch (e) {
+          file = null;
+        }
+        if (file && navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+          return navigator.share({ files: [file], title: 'Second Look', text: text + ' ' + url });
+        }
+        if (navigator.share) return navigator.share({ title: 'Second Look', text: text, url: url });
+        if (blob) downloadBlob(blob, 'second-look-result.png');
+        return copyText(text + ' ' + url).then(function () {
+          toast('♞', blob ? 'Picture saved' : 'Link copied', blob ? 'The link is copied too, so you can paste it to a friend.' : 'Paste it to a friend.');
+        });
+      })
+      .catch(function () { /* sharing cancelled */ })
+      .then(function () { ui.btnShare.disabled = false; });
   }
 
   function drawEvalGraph(len) {
@@ -4713,6 +4873,7 @@
       btnSummaryReview: $('btnSummaryReview'),
       installCard: $('installCard'),
       btnPlayFrom: $('btnPlayFrom'),
+      btnShare: $('btnShare'),
       btnSummaryRetry: $('btnSummaryRetry'),
       momentsWrap: $('momentsWrap'),
       momentsList: $('momentsList'),
@@ -4928,6 +5089,7 @@
         playFrom(p - 1, p);
       }
     });
+    ui.btnShare.addEventListener('click', shareResult);
     ui.btnPlayFrom.addEventListener('click', function () {
       if (S.viewPly !== null) playFrom(S.viewPly, null);
     });

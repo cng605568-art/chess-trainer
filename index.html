@@ -4,7 +4,35 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Second Look: chess trainer with a live coach</title>
-  <meta name="description" content="Play Stockfish with a coach that stops your blunders before they happen, explains every move in plain English, and turns your mistakes into puzzles.">
+  <meta name="description" content="Learn chess free with a coach that stops your blunders before they happen, explains every move in plain words, and turns your mistakes into puzzles. 21 beginner lessons, 1,366 puzzles, bots from beginner to Stockfish.">
+  <link rel="canonical" href="https://chess-trainer-coral-zeta.vercel.app/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Second Look">
+  <meta property="og:title" content="Second Look: learn chess free with a coach that stops your blunders">
+  <meta property="og:description" content="Beginner lessons, 1,366 puzzles and bots from beginner to Stockfish. Every move explained in plain words. Free, no sign-up.">
+  <meta property="og:url" content="https://chess-trainer-coral-zeta.vercel.app/">
+  <meta property="og:image" content="https://chess-trainer-coral-zeta.vercel.app/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="A chess board where the coach warns that the queen on f7 can be taken, next to the Second Look name.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Second Look: learn chess free">
+  <meta name="twitter:description" content="A chess coach that stops your blunders and explains every move in plain words.">
+  <meta name="twitter:image" content="https://chess-trainer-coral-zeta.vercel.app/og-image.png">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Second Look",
+    "url": "https://chess-trainer-coral-zeta.vercel.app/",
+    "description": "Learn chess free with a coach that stops your blunders, explains every move in plain words, and turns your mistakes into puzzles.",
+    "applicationCategory": "GameApplication",
+    "operatingSystem": "Any (runs in the browser)",
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "image": "https://chess-trainer-coral-zeta.vercel.app/og-image.png"
+  }
+  </script>
   <meta name="theme-color" content="#202020">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
@@ -384,6 +412,7 @@
                 <button type="button" class="btn btn-primary" id="btnSummaryRetry" hidden>Try your biggest mistake again</button>
                 <button type="button" class="btn btn-ghost" id="btnSummaryBank">Practice these mistakes</button>
                 <button type="button" class="btn btn-ghost" id="btnSummaryReview">Replay the game</button>
+                <button type="button" class="btn btn-ghost" id="btnShare">Share result</button>
               </div>
             </section>
 
@@ -647,7 +676,8 @@
           Rules: <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener">chess.js</a>.
           Pieces: Cburnett, <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>, via
           <a href="https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces" target="_blank" rel="noopener">Wikimedia Commons</a>.
-          Your games and blunders stay in this browser.
+          Puzzles: <a href="https://database.lichess.org/#puzzles" target="_blank" rel="noopener">Lichess puzzle database</a> (public domain).
+          Your games and blunders stay in this browser. <a href="/about">About Second Look</a>.
         </p>
       </footer>
     </main>
