@@ -4719,6 +4719,198 @@
   }
 
   /* ======================================================================== */
+  /* Move progress to another device (backup file or transfer code)          */
+  /* ======================================================================== */
+
+  var BACKUP_PREFIX = 'chessTrainer.';
+
+  function collectBackup() {
+    var data = {};
+    try {
+      for (var i = 0; i < window.localStorage.length; i++) {
+        var k = window.localStorage.key(i);
+        if (k && k.indexOf(BACKUP_PREFIX) === 0) data[k] = window.localStorage.getItem(k);
+      }
+    } catch (e) {
+      /* storage blocked: nothing to back up */
+    }
+    return { app: 'second-look', v: 1, exportedAt: Date.now(), data: data };
+  }
+
+  function checkBackup(obj) {
+    if (!obj || obj.app !== 'second-look' || !obj.data || typeof obj.data !== 'object') {
+      throw new Error("This isn't a Second Look backup.");
+    }
+    var keys = Object.keys(obj.data).filter(function (k) { return k.indexOf(BACKUP_PREFIX) === 0 && typeof obj.data[k] === 'string'; });
+    if (!keys.length) throw new Error('This backup is empty.');
+    return keys;
+  }
+
+  /** Replace this browser's progress with the backup, then reload. */
+  function applyBackup(obj) {
+    var keys = checkBackup(obj);
+    var when = typeof obj.exportedAt === 'number' ? new Date(obj.exportedAt).toLocaleString() : 'an earlier date';
+    if (!window.confirm('Replace the progress on this device with the backup from ' + when + '? Your current games, puzzles and badges here will be replaced.')) return false;
+    try {
+      var old = [];
+      for (var i = 0; i < window.localStorage.length; i++) {
+        var k = window.localStorage.key(i);
+        if (k && k.indexOf(BACKUP_PREFIX) === 0) old.push(k);
+      }
+      old.forEach(function (key) { window.localStorage.removeItem(key); });
+      keys.forEach(function (key) { window.localStorage.setItem(key, obj.data[key]); });
+    } catch (e) {
+      throw new Error("This browser won't let the site save data. Check that private browsing is off.");
+    }
+    S.restoring = true;
+    toast('✓', 'Progress loaded', 'Reloading…');
+    setTimeout(function () { location.reload(); }, 700);
+    return true;
+  }
+
+  function bytesToBase64(bytes) {
+    var bin = '';
+    for (var i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+
+  function base64ToBytes(b64) {
+    var bin = atob(b64);
+    var out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  function streamBytes(bytes, stream) {
+    var piped = new Blob([bytes]).stream().pipeThrough(stream);
+    return new Response(piped).arrayBuffer().then(function (buf) { return new Uint8Array(buf); });
+  }
+
+  /** Transfer code: "SL1:" + gzip + base64, or "SL0:" + base64 where gzip isn't available. */
+  function encodeTransfer(obj) {
+    var bytes = new TextEncoder().encode(JSON.stringify(obj));
+    if (typeof CompressionStream === 'function') {
+      return streamBytes(bytes, new CompressionStream('gzip')).then(function (gz) { return 'SL1:' + bytesToBase64(gz); });
+    }
+    return Promise.resolve('SL0:' + bytesToBase64(bytes));
+  }
+
+  function decodeTransfer(text) {
+    var code = String(text || '').replace(/\s+/g, '');
+    var head = code.slice(0, 4);
+    var body = code.slice(4);
+    var bytes;
+    try {
+      bytes = base64ToBytes(body);
+    } catch (e) {
+      return Promise.reject(new Error("That code isn't complete. Copy it again and paste the whole thing."));
+    }
+    var json;
+    if (head === 'SL1:') {
+      if (typeof DecompressionStream !== 'function') return Promise.reject(new Error('This browser is too old to read the code. Use a backup file instead.'));
+      json = streamBytes(bytes, new DecompressionStream('gzip')).then(function (raw) { return new TextDecoder().decode(raw); });
+    } else if (head === 'SL0:') {
+      json = Promise.resolve(new TextDecoder().decode(bytes));
+    } else {
+      return Promise.reject(new Error("That doesn't look like a transfer code. It should start with SL."));
+    }
+    return json.then(function (t) { return JSON.parse(t); }).catch(function (e) {
+      throw new Error(e && e.message && e.message.indexOf('Second Look') !== -1 ? e.message : "That code isn't complete. Copy it again and paste the whole thing.");
+    });
+  }
+
+  function backupFileName() {
+    return 'second-look-backup-' + todayKey() + '.json';
+  }
+
+  var CodeModal = {
+    mode: 'paste', // paste | show
+
+    open: function (mode, code) {
+      this.mode = mode;
+      var modal = $('codeModal');
+      var input = $('codeInput');
+      $('codeError').textContent = '';
+      if (mode === 'show') {
+        $('codeTitle').textContent = 'Your transfer code';
+        $('codeText').textContent = "Copy this whole code, then on your other device open Settings, press Paste transfer code and paste it there.";
+        input.value = code;
+        input.readOnly = true;
+        $('btnCodeGo').textContent = 'Copy code';
+      } else {
+        $('codeTitle').textContent = 'Paste your transfer code';
+        $('codeText').textContent = 'On your other device, open Settings and press Copy transfer code. Then paste it here.';
+        input.value = '';
+        input.readOnly = false;
+        $('btnCodeGo').textContent = 'Load progress';
+      }
+      modal.hidden = false;
+      document.body.classList.add('modal-open');
+      setTimeout(function () {
+        input.focus();
+        if (mode === 'show') input.select();
+      }, 30);
+    },
+
+    close: function () {
+      $('codeModal').hidden = true;
+      document.body.classList.remove('modal-open');
+    },
+
+    go: function () {
+      var self = this;
+      var input = $('codeInput');
+      if (this.mode === 'show') {
+        input.select();
+        copyText(input.value).then(function () {
+          toast('✓', 'Code copied', 'Paste it on your other device in Settings.');
+        });
+        return;
+      }
+      $('codeError').textContent = '';
+      decodeTransfer(input.value)
+        .then(function (obj) {
+          if (applyBackup(obj)) self.close();
+        })
+        .catch(function (e) {
+          $('codeError').textContent = (e && e.message) || "That code didn't work.";
+        });
+    }
+  };
+
+  function setupBackup() {
+    $('btnBackupSave').addEventListener('click', function () {
+      var blob = new Blob([JSON.stringify(collectBackup())], { type: 'application/json' });
+      downloadBlob(blob, backupFileName());
+      toast('✓', 'Backup saved', 'Open Settings on your other device and press Load backup file.');
+    });
+    $('btnBackupLoad').addEventListener('click', function () { $('backupFile').click(); });
+    $('backupFile').addEventListener('change', function () {
+      var file = this.files && this.files[0];
+      this.value = '';
+      if (!file) return;
+      file.text().then(function (t) {
+        return applyBackup(JSON.parse(t));
+      }).catch(function (e) {
+        toast('!', "Couldn't load that file", e && e.message && e.message.indexOf('JSON') === -1 ? e.message : "This isn't a Second Look backup.");
+      });
+    });
+    $('btnCodeCopy').addEventListener('click', function () {
+      encodeTransfer(collectBackup()).then(function (code) {
+        CodeModal.open('show', code);
+      });
+    });
+    $('btnCodePaste').addEventListener('click', function () { CodeModal.open('paste'); });
+    $('btnCodeGo').addEventListener('click', function () { CodeModal.go(); });
+    $('codeModal').addEventListener('click', function (e) {
+      if (e.target.closest('[data-close]')) CodeModal.close();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !$('codeModal').hidden) CodeModal.close();
+    });
+  }
+
+  /* ======================================================================== */
   /* Install as an app (PWA)                                                  */
   /* ======================================================================== */
 
@@ -5064,6 +5256,7 @@
 
     // Keep the clocks if the tab is closed or the phone switches apps mid-game.
     function saveIfSteady() {
+      if (S.restoring) return;
       if (S.started && (S.phase === 'player' || S.phase === 'bot') && ownsSavedGame()) saveGame();
     }
     window.addEventListener('pagehide', saveIfSteady);
@@ -5188,6 +5381,7 @@
     Puzzles.init();
     Learn.init();
     setupInstall();
+    setupBackup();
     updateBankBadge();
     engine.start();
     S.homeLevel = S.levelIndex;

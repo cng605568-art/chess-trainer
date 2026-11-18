@@ -486,6 +486,17 @@
                   <label class="swatch"><input type="radio" name="boardTheme" value="brown"><span class="swatch-board swatch-brown" aria-hidden="true"></span><span class="swatch-name">Brown</span></label>
                 </div>
               </fieldset>
+              <fieldset class="setting setting-stack" id="backupSection">
+                <legend class="setting-name">Move to another device</legend>
+                <p class="setting-help">Your games, puzzles, lessons and badges are saved only in this browser. Make a backup here, then load it on your other phone or computer.</p>
+                <div class="backup-actions">
+                  <button type="button" class="btn btn-ghost" id="btnBackupSave">Save backup file</button>
+                  <button type="button" class="btn btn-ghost" id="btnBackupLoad">Load backup file</button>
+                  <button type="button" class="btn btn-ghost" id="btnCodeCopy">Copy transfer code</button>
+                  <button type="button" class="btn btn-ghost" id="btnCodePaste">Paste transfer code</button>
+                </div>
+                <input type="file" id="backupFile" accept="application/json,.json" hidden>
+              </fieldset>
             </div>
           </div>
 
@@ -698,6 +709,23 @@
         <button type="button" class="promo-btn" data-piece="n"><span class="promo-piece"></span><span>Knight</span></button>
       </div>
       <button type="button" class="btn btn-quiet modal-cancel" data-close>Cancel move</button>
+    </div>
+  </div>
+
+  <!-- ================================================================== -->
+  <!-- Transfer code (move progress to another device)                    -->
+  <!-- ================================================================== -->
+  <div class="modal" id="codeModal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card code-card" role="dialog" aria-modal="true" aria-labelledby="codeTitle" aria-describedby="codeText">
+      <h2 class="modal-title font-display" id="codeTitle">Paste your transfer code</h2>
+      <p class="modal-text" id="codeText">On your other device, open Settings and press Copy transfer code. Then paste it here.</p>
+      <textarea class="code-input" id="codeInput" rows="5" spellcheck="false" autocomplete="off" aria-labelledby="codeTitle"></textarea>
+      <p class="code-error" id="codeError" role="alert"></p>
+      <div class="code-actions">
+        <button type="button" class="btn btn-primary" id="btnCodeGo">Load progress</button>
+        <button type="button" class="btn btn-quiet" data-close>Cancel</button>
+      </div>
     </div>
   </div>
 
