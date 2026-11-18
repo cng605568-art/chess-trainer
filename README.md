@@ -35,7 +35,7 @@ Then open `http://localhost:3000` (or `:8000`).
 
 ## Layout
 
-A sidebar on the left switches between **Play** and **Blunder Bank**. The board sits in the middle with player bars above and below it. The right panel has three tabs: **Game** (status, controls, game summary, coach notes, moves), **New game** (choose your colour and pick a bot from six cards) and **Settings** (Coach Guard, evaluation bar, sounds, board colour). On phones the sidebar becomes a top bar and the panel moves below the board.
+A sidebar on the left switches between **Home**, **Play**, **Blunder Bank** and **Settings**. The board sits in the middle with player bars above and below it. The right panel has three tabs: **Game** (status, controls, game summary, coach notes, moves), **New game** (choose your colour and pick a bot from six cards) and **Settings** (Coach Guard, evaluation bar, sounds, board colour). On phones the sidebar turns into a slide-out menu behind the ☰ button, the top bar gets quick buttons for the Blunder Bank and sound, and the site opens on **Home**: a Play card with level chips and a big Start game button, shortcut buttons, a puzzle card showing your newest saved blunder, your game history, and stats (games, wins, Coach Guard saves, puzzles solved and waiting). Finishing games without a blunder builds a clean-game streak.
 
 ## What's inside
 
@@ -58,7 +58,28 @@ A sidebar on the left switches between **Play** and **Blunder Bank**. The board 
 
 **Bot levels.** Six levels, from Rookie (plays random moves part of the time) up to full-strength Stockfish, using Stockfish's `Skill Level` option.
 
-**Sounds.** Wooden piece clicks for moves and captures, a double click for castling, chimes for check, promotion, hints and solved puzzles, a low two-note alert when Coach Guard steps in, and short tunes for a win, loss or draw. They are generated in the browser with the Web Audio API, so there are no audio files to download or license. Turn them off in the Settings tab, where you can also switch the board between green (the default), grey and brown.
+**Sounds.** Out of the box, sounds are modelled in the browser: each move is a short click that rings a few wooden resonances plus a low board thump, with a little room echo and slight variation every time, and alerts use marimba-style notes. Turn them off in Settings (or with the speaker button on phones), where you can also switch the board between green (the default), grey and brown.
+
+### Using recorded sounds instead
+
+Add a `sounds` folder next to `index.html` with any of these MP3 files and the site uses them automatically (anything missing falls back to the built-in sound):
+
+| File | Plays when |
+| --- | --- |
+| `move.mp3` | A piece moves (required: the site checks for this one first) |
+| `capture.mp3` | A piece is captured |
+| `castle.mp3` | Either side castles |
+| `check.mp3` | A king is put in check |
+| `promote.mp3` | A pawn promotes |
+| `game-start.mp3` | A new game starts |
+| `game-win.mp3`, `game-lose.mp3`, `game-draw.mp3` | The game ends (or one `game-end.mp3` for all three) |
+| `warning.mp3` | Coach Guard steps in |
+| `notify.mp3` | The bot slips up and the coach points it out |
+| `puzzle-correct.mp3`, `puzzle-wrong.mp3` | You solve or miss a Blunder Bank puzzle |
+
+On GitHub you can add them with **Add file → Upload files**, typing `sounds/` in front of the names; Vercel redeploys on its own. Settings then says "Playing the recorded sounds from your sounds folder."
+
+Use sounds you are allowed to publish, since files in a public repo can be downloaded by anyone. Chess.com's sound files belong to Chess.com, and Lichess lists its standard sound set as non-free, so neither can be reused. Sounds marked CC0 (public domain) are the simplest; for anything else, check the licence allows putting the files on a public website and add the credit it asks for.
 
 **Game summary and replay.** When a game ends, the side panel shows how your moves were rated (best, good, inaccuracies, mistakes, blunders), how many times Coach Guard saved you, and a graph of who was ahead. Click the graph, any move in the move list, or use the arrow keys to step back through the game. Moves marked `?!`, `?` and `??` in the list are your inaccuracies, mistakes and blunders.
 

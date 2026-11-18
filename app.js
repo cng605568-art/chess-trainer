@@ -37,6 +37,9 @@
   var MIN_BOT_THINK_MS = 450;
   var SETTINGS_KEY = 'chessTrainer.settings.v1';
   var GAME_KEY = 'chessTrainer.game.v1';
+  var HISTORY_KEY = 'chessTrainer.history.v1';
+  var STATS_KEY = 'chessTrainer.stats.v1';
+  var START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
   var SVG_NS = 'http://www.w3.org/2000/svg';
   var FILES = 'abcdefgh';
 
@@ -211,15 +214,53 @@
   }
 
   /* ======================================================================== */
-  /* Sound effects: synthesized with Web Audio, so there are no files to load */
+  /* Sound effects                                                            */
+  /* Recorded files in ./sounds/ are used when present. Otherwise sounds are  */
+  /* modelled in the browser: a wooden knock for moves, marimba-style notes   */
+  /* for alerts, with a touch of room echo and slight variation every time.   */
   /* ======================================================================== */
 
   var Sound = (function () {
     var AC = window.AudioContext || window.webkitAudioContext;
     var ctx = null;
+    var bus = null;
     var out = null;
     var noiseBuf = null;
     var enabled = true;
+    var samples = {};
+    var samplesTried = false;
+    var packListeners = [];
+    var SAMPLE_DIR = './sounds/';
+    var SAMPLE_FILES = {
+      move: 'move',
+      capture: 'capture',
+      castle: 'castle',
+      check: 'check',
+      promote: 'promote',
+      start: 'game-start',
+      win: 'game-win',
+      lose: 'game-lose',
+      draw: 'game-draw',
+      end: 'game-end',
+      warning: 'warning',
+      notify: 'notify',
+      correct: 'puzzle-correct',
+      wrong: 'puzzle-wrong'
+    };
+
+    function impulse(c) {
+      var len = Math.floor(c.sampleRate * 0.32);
+      var buf = c.createBuffer(2, len, c.sampleRate);
+      for (var ch = 0; ch < 2; ch++) {
+        var d = buf.getChannelData(ch);
+        var last = 0;
+        for (var i = 0; i < len; i++) {
+          last = last * 0.6 + (Math.random() * 2 - 1) * 0.4; // soft low-pass: a small warm room
+          d[i] = last * Math.pow(1 - i / len, 3);
+        }
+      }
+      return buf;
+    }
 
     function context() {
       if (!enabled || !AC) return null;
@@ -231,116 +272,210 @@
           return null;
         }
         var comp = ctx.createDynamicsCompressor();
-        comp.threshold.value = -12;
-        comp.ratio.value = 4;
+        comp.threshold.value = -14;
+        comp.ratio.value = 3;
         out = ctx.createGain();
-        out.gain.value = 0.6;
+        out.gain.value = 0.75;
         out.connect(comp);
         comp.connect(ctx.destination);
+        bus = ctx.createGain();
+        bus.connect(out);
+        try {
+          var verb = ctx.createConvolver();
+          verb.buffer = impulse(ctx);
+          var wet = ctx.createGain();
+          wet.gain.value = 0.14;
+          bus.connect(verb);
+          verb.connect(wet);
+          wet.connect(out);
+        } catch (e) {
+          /* no reverb on very old browsers */
+        }
       }
       if (ctx.state === 'suspended' && ctx.resume) ctx.resume().catch(function () {});
+      loadSamples();
       return ctx;
     }
 
+    /* ---- recorded sounds (optional) ---- */
+
+    function decode(ab) {
+      return new Promise(function (resolve) {
+        try {
+          var p = ctx.decodeAudioData(ab, resolve, function () { resolve(null); });
+          if (p && typeof p.then === 'function') p.then(resolve, function () { resolve(null); });
+        } catch (e) {
+          resolve(null);
+        }
+      });
+    }
+
+    function fetchSample(name) {
+      return fetch(SAMPLE_DIR + SAMPLE_FILES[name] + '.mp3', { cache: 'force-cache' })
+        .then(function (r) { return r.ok ? r.arrayBuffer() : null; })
+        .then(function (ab) { return ab && ab.byteLength > 64 ? decode(ab) : null; })
+        .catch(function () { return null; });
+    }
+
+    function loadSamples() {
+      if (samplesTried || !ctx || typeof fetch !== 'function') return;
+      samplesTried = true;
+      // Try one file first, so a site without a sounds folder makes a single request.
+      fetchSample('move').then(function (buf) {
+        if (!buf) return;
+        samples.move = buf;
+        Object.keys(SAMPLE_FILES).forEach(function (name) {
+          if (name === 'move') return;
+          fetchSample(name).then(function (b) { if (b) samples[name] = b; });
+        });
+        packListeners.forEach(function (fn) { fn(true); });
+      });
+    }
+
+    function sampleFor(name) {
+      if (samples[name]) return samples[name];
+      if ((name === 'win' || name === 'lose' || name === 'draw') && samples.end) return samples.end;
+      return null;
+    }
+
+    function playSample(c, t, buf, name) {
+      var src = c.createBufferSource();
+      src.buffer = buf;
+      if (name === 'move' || name === 'capture' || name === 'castle') src.playbackRate.value = 0.98 + Math.random() * 0.04;
+      var g = c.createGain();
+      g.gain.value = 0.9;
+      src.connect(g);
+      g.connect(out); // recordings already carry their own room sound
+      src.start(t);
+    }
+
+    /* ---- modelled sounds ---- */
+
     function noise(c) {
       if (noiseBuf) return noiseBuf;
-      var len = Math.floor(c.sampleRate * 0.2);
+      var len = Math.floor(c.sampleRate * 0.06);
       noiseBuf = c.createBuffer(1, len, c.sampleRate);
       var d = noiseBuf.getChannelData(0);
-      for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+      for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
       return noiseBuf;
     }
 
     function envelope(c, t, attack, decay, peak) {
       var g = c.createGain();
       g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(peak, t + attack);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), t + attack);
       g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
-      g.connect(out);
+      g.connect(bus);
       return g;
     }
 
-    function tone(c, t, freq, o) {
-      o = o || {};
-      var attack = o.attack || 0.006;
-      var decay = o.decay || 0.2;
+    function partial(c, t, freq, attack, decay, peak, drift) {
       var osc = c.createOscillator();
-      osc.type = o.type || 'sine';
+      osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, t);
-      if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, t + attack + decay);
-      osc.connect(envelope(c, t, attack, decay, o.gain || 0.2));
+      if (drift) osc.frequency.exponentialRampToValueAtTime(freq * drift, t + attack + decay);
+      osc.connect(envelope(c, t, attack, decay, peak));
       osc.start(t);
       osc.stop(t + attack + decay + 0.05);
     }
 
-    // A wooden piece landing on the board: a filtered noise click plus a low thump.
+    // A wooden piece landing on a wooden board: a very short click excites a
+    // handful of inharmonic wooden modes plus a low thump from the board.
+    var WOOD_MODES = [[1, 0.075, 1], [1.91, 0.05, 0.55], [3.14, 0.032, 0.32], [4.6, 0.02, 0.18], [0.31, 0.11, 0.42]];
+
     function knock(c, t, o) {
       o = o || {};
+      var pitch = (o.pitch || 1) * (0.97 + Math.random() * 0.06);
+      var level = (o.gain || 1) * (0.9 + Math.random() * 0.2);
+      var src = c.createBufferSource();
+      src.buffer = noise(c);
+      var hp = c.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 2200 * pitch;
+      src.connect(hp);
+      hp.connect(envelope(c, t, 0.0008, 0.012 * (o.clickLen || 1), 0.5 * level * (o.click || 1)));
+      src.start(t);
+      src.stop(t + 0.06);
+      var base = (o.freq || 620) * pitch;
+      var decayScale = o.decay || 1;
+      WOOD_MODES.forEach(function (m) {
+        partial(c, t, base * m[0], 0.0015, m[1] * decayScale, 0.3 * m[2] * level, 0.985);
+      });
+    }
+
+    // A soft mallet on a wooden bar: fundamental plus the bright marimba overtones.
+    function mallet(c, t, freq, o) {
+      o = o || {};
+      var level = o.gain || 0.2;
+      var decay = o.decay || 0.6;
+      partial(c, t, freq, 0.004, decay, level);
+      partial(c, t, freq * 3.93, 0.003, decay * 0.3, level * 0.28);
+      partial(c, t, freq * 9.2, 0.002, decay * 0.1, level * 0.1);
       var src = c.createBufferSource();
       src.buffer = noise(c);
       var bp = c.createBiquadFilter();
       bp.type = 'bandpass';
-      bp.frequency.value = o.freq || 1800;
-      bp.Q.value = o.q || 1.2;
+      bp.frequency.value = Math.min(8000, freq * 2);
+      bp.Q.value = 2;
       src.connect(bp);
-      bp.connect(envelope(c, t, 0.002, o.decay || 0.07, o.gain || 0.9));
+      bp.connect(envelope(c, t, 0.001, 0.008, level * 0.35));
       src.start(t);
-      src.stop(t + 0.15);
-      var body = o.body || 200;
-      tone(c, t, body, { to: body * 0.6, decay: 0.08, gain: (o.gain || 0.9) * 0.5 });
+      src.stop(t + 0.03);
     }
 
-    function arpeggio(c, t, freqs, step, o) {
-      freqs.forEach(function (f, i) { tone(c, t + i * step, f, o); });
+    function notes(c, t, freqs, step, o) {
+      freqs.forEach(function (f, i) { mallet(c, t + i * step, f, o); });
     }
 
-    var lib = {
-      move: function (c, t, opp) { knock(c, t, { freq: opp ? 1450 : 1800, body: opp ? 170 : 200 }); },
+    var synth = {
+      move: function (c, t, opp) { knock(c, t, { freq: opp ? 570 : 620 }); },
       capture: function (c, t, opp) {
-        knock(c, t, { freq: opp ? 2300 : 2700, q: 0.8, decay: 0.045, gain: 1 });
-        knock(c, t + 0.04, { freq: opp ? 1250 : 1500, body: opp ? 150 : 175, decay: 0.09, gain: 0.85 });
+        knock(c, t, { freq: opp ? 1050 : 1150, click: 1.6, decay: 0.55, gain: 0.75 });
+        knock(c, t + 0.035, { freq: opp ? 560 : 610, gain: 1.05, decay: 1.1 });
       },
       castle: function (c, t, opp) {
-        knock(c, t, { freq: opp ? 1450 : 1800 });
-        knock(c, t + 0.12, { freq: opp ? 1300 : 1600, body: 180, gain: 0.8 });
+        knock(c, t, { freq: opp ? 570 : 620 });
+        knock(c, t + 0.13, { freq: opp ? 520 : 580, gain: 0.85 });
       },
       check: function (c, t) {
-        knock(c, t, { freq: 1900 });
-        tone(c, t + 0.03, 987.77, { type: 'triangle', decay: 0.16, gain: 0.16 });
-        tone(c, t + 0.12, 739.99, { type: 'triangle', decay: 0.26, gain: 0.15 });
+        knock(c, t, { freq: 640 });
+        mallet(c, t + 0.05, 1046.5, { gain: 0.15, decay: 0.45 });
+        mallet(c, t + 0.13, 1318.51, { gain: 0.13, decay: 0.55 });
       },
       promote: function (c, t) {
-        knock(c, t, { freq: 1900 });
-        arpeggio(c, t + 0.05, [523.25, 659.25, 783.99, 1046.5], 0.07, { type: 'triangle', decay: 0.22, gain: 0.13 });
+        knock(c, t, { freq: 640 });
+        notes(c, t + 0.06, [783.99, 987.77, 1174.66, 1567.98], 0.07, { gain: 0.13, decay: 0.5 });
       },
       warning: function (c, t) {
-        tone(c, t, 392, { type: 'triangle', decay: 0.2, gain: 0.24 });
-        tone(c, t + 0.18, 277.18, { type: 'triangle', decay: 0.38, gain: 0.24 });
+        mallet(c, t, 392, { gain: 0.3, decay: 0.5 });
+        mallet(c, t + 0.2, 311.13, { gain: 0.3, decay: 0.7 });
       },
-      undo: function (c, t) { tone(c, t, 560, { to: 330, decay: 0.16, gain: 0.15 }); },
-      hint: function (c, t) { arpeggio(c, t, [880, 1318.51], 0.07, { decay: 0.18, gain: 0.1 }); },
-      notify: function (c, t) { arpeggio(c, t, [1046.5, 1567.98], 0.06, { type: 'triangle', decay: 0.2, gain: 0.09 }); },
-      correct: function (c, t) { arpeggio(c, t, [659.25, 830.61, 987.77, 1318.51], 0.075, { type: 'triangle', decay: 0.3, gain: 0.14 }); },
+      undo: function (c, t) { knock(c, t, { freq: 520, gain: 0.6, decay: 0.8, click: 0.6 }); },
+      hint: function (c, t) { notes(c, t, [880, 1318.51], 0.08, { gain: 0.11, decay: 0.45 }); },
+      notify: function (c, t) { notes(c, t, [1046.5, 1567.98], 0.07, { gain: 0.1, decay: 0.5 }); },
+      correct: function (c, t) { notes(c, t, [659.25, 830.61, 987.77, 1318.51], 0.08, { gain: 0.14, decay: 0.7 }); },
       wrong: function (c, t) {
-        tone(c, t, 233.08, { to: 207.65, type: 'triangle', decay: 0.18, gain: 0.22 });
-        tone(c, t + 0.15, 196, { to: 174.61, type: 'triangle', decay: 0.3, gain: 0.22 });
+        mallet(c, t, 233.08, { gain: 0.26, decay: 0.3 });
+        mallet(c, t + 0.15, 196, { gain: 0.26, decay: 0.45 });
       },
-      start: function (c, t) { arpeggio(c, t, [523.25, 783.99], 0.09, { type: 'triangle', decay: 0.22, gain: 0.12 }); },
+      start: function (c, t) { notes(c, t, [523.25, 783.99], 0.1, { gain: 0.14, decay: 0.6 }); },
       win: function (c, t) {
-        arpeggio(c, t, [523.25, 659.25, 783.99], 0.1, { type: 'triangle', decay: 0.25, gain: 0.15 });
-        [1046.5, 1318.51, 1567.98].forEach(function (f) { tone(c, t + 0.32, f, { type: 'triangle', decay: 0.7, gain: 0.09 }); });
+        notes(c, t, [523.25, 659.25, 783.99], 0.11, { gain: 0.16, decay: 0.6 });
+        [1046.5, 1318.51, 1567.98].forEach(function (f) { mallet(c, t + 0.36, f, { gain: 0.1, decay: 1.2 }); });
       },
-      lose: function (c, t) { arpeggio(c, t, [440, 392, 349.23, 293.66], 0.16, { type: 'triangle', decay: 0.35, gain: 0.15 }); },
-      draw: function (c, t) { arpeggio(c, t, [587.33, 523.25], 0.16, { type: 'triangle', decay: 0.4, gain: 0.14 }); }
+      lose: function (c, t) { notes(c, t, [440, 392, 349.23, 293.66], 0.17, { gain: 0.16, decay: 0.8 }); },
+      draw: function (c, t) { notes(c, t, [587.33, 523.25], 0.18, { gain: 0.15, decay: 0.8 }); }
     };
 
     return {
       play: function (name, variant) {
-        if (!enabled || !lib[name]) return;
+        if (!enabled || !synth[name]) return;
         var c = context();
         if (!c || c.state !== 'running') return;
         try {
-          lib[name](c, c.currentTime + 0.01, variant);
+          var buf = sampleFor(name);
+          if (buf) playSample(c, c.currentTime + 0.005, buf, name);
+          else synth[name](c, c.currentTime + 0.01, variant);
         } catch (e) {
           /* sound is a bonus; never let it break the game */
         }
@@ -351,7 +486,9 @@
       setEnabled: function (on) {
         enabled = !!on;
         if (!enabled && ctx && ctx.state === 'running' && ctx.suspend) ctx.suspend().catch(function () {});
-      }
+      },
+      usingRecorded: function () { return !!samples.move; },
+      onPack: function (fn) { packListeners.push(fn); }
     };
   })();
 
@@ -1112,6 +1249,7 @@
     engineNotice: null,
     soundOn: true,
     boardTheme: 'green',
+    homeLevel: 2,
     boardThemeChosen: false,
     started: false,
     viewPly: null, // null = live position; a number = replaying that ply
@@ -1122,6 +1260,7 @@
 
   var engine = new EngineClient(onEngineStatus);
   var board;
+  var homeBoard;
 
   function oppColor() { return C.opposite(S.playerColor); }
   function oppName() { return C.COLOR_NAMES[oppColor()]; }
@@ -1164,6 +1303,58 @@
     }
     var moves = S.game.history({ verbose: true }).map(moveToUci);
     store.set(GAME_KEY, JSON.stringify({ v: 1, moves: moves, playerColor: S.playerColor, gameId: S.gameId, savedAt: Date.now() }));
+  }
+
+  function readJSON(key, fallback) {
+    try {
+      var v = JSON.parse(store.get(key));
+      return v === null || v === undefined ? fallback : v;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function loadHistory() {
+    var h = readJSON(HISTORY_KEY, []);
+    return Array.isArray(h) ? h.filter(function (x) { return x && typeof x.at === 'number' && typeof x.result === 'string'; }) : [];
+  }
+
+  function loadStats() {
+    var st = readJSON(STATS_KEY, {}) || {};
+    return {
+      games: parseInt(st.games, 10) || 0,
+      wins: parseInt(st.wins, 10) || 0,
+      losses: parseInt(st.losses, 10) || 0,
+      draws: parseInt(st.draws, 10) || 0,
+      saves: parseInt(st.saves, 10) || 0
+    };
+  }
+
+  function saveStats(st) {
+    store.set(STATS_KEY, JSON.stringify(st));
+  }
+
+  function recordGame(term, playerWon) {
+    var blunders = Object.keys(S.review.quality).filter(function (k) { return S.review.quality[k].cls === 'blunder'; }).length;
+    var result = term === 'checkmate' ? (playerWon ? 'win' : 'loss') : 'draw';
+    var list = loadHistory();
+    list.unshift({
+      at: Date.now(),
+      result: result,
+      how: term,
+      level: S.levelIndex,
+      color: S.playerColor,
+      moves: Math.ceil(S.game.history().length / 2),
+      blunders: blunders,
+      saves: S.review.saves
+    });
+    store.set(HISTORY_KEY, JSON.stringify(list.slice(0, 50)));
+    var st = loadStats();
+    st.games++;
+    if (result === 'win') st.wins++;
+    else if (result === 'loss') st.losses++;
+    else st.draws++;
+    saveStats(st);
   }
 
   function onEngineStatus(s) {
@@ -1584,6 +1775,9 @@
         if (choice === 'undo') {
           S.game.undo();
           S.review.saves++;
+          var savedStats = loadStats();
+          savedStats.saves++;
+          saveStats(savedStats);
           C.BlunderBank.update(added.entry.id, { caught: true });
           Sound.play('undo');
           syncBoard(true);
@@ -1725,6 +1919,7 @@
     setStatus(text, 'over', 'Replay the game to see where it turned, or start a new one.');
     refreshControls();
     Sound.play(term === 'checkmate' ? (playerWon ? 'win' : 'lose') : 'draw');
+    recordGame(term, playerWon);
     var summary = S.bankedThisGame > 0
       ? 'This game added ' + S.bankedThisGame + (S.bankedThisGame === 1 ? ' blunder' : ' blunders') + ' to My Blunder Bank. Solving them is the fastest way to stop repeating them.'
       : 'No new blunders saved this game. Nicely done.';
@@ -2369,27 +2564,149 @@
     ui.bankBadge.textContent = String(n);
     ui.bankBadge.hidden = n === 0;
     ui.bankBadge.setAttribute('aria-label', n + (n === 1 ? ' saved blunder' : ' saved blunders'));
+    ui.bankBadgeMobile.textContent = n > 99 ? '99+' : String(n);
+    ui.bankBadgeMobile.hidden = n === 0;
+    ui.btnBankQuick.setAttribute('aria-label', 'My Blunder Bank, ' + n + (n === 1 ? ' puzzle waiting' : ' puzzles waiting'));
+    renderHome();
   }
 
   /* ======================================================================== */
   /* Tabs                                                                     */
   /* ======================================================================== */
 
+  function isMobile() {
+    return window.matchMedia && window.matchMedia('(max-width: 1023px)').matches;
+  }
+
   function showTab(name) {
-    var isBank = name === 'bank';
-    if (isBank && (S.phase === 'warning' || S.phase === 'promoting')) return;
-    ui.tabPlay.setAttribute('aria-selected', String(!isBank));
-    ui.tabBank.setAttribute('aria-selected', String(isBank));
-    ui.tabPlay.tabIndex = isBank ? -1 : 0;
-    ui.tabBank.tabIndex = isBank ? 0 : -1;
-    ui.viewPlay.hidden = isBank;
-    ui.viewBank.hidden = !isBank;
+    if (S.phase === 'warning' || S.phase === 'promoting') return;
+    if (name !== 'home' && name !== 'bank') name = 'play';
+    var wasHidden = name === 'home' ? ui.viewHome.hidden : name === 'bank' ? ui.viewBank.hidden : ui.viewPlay.hidden;
+    ui.viewHome.hidden = name !== 'home';
+    ui.viewPlay.hidden = name !== 'play';
+    ui.viewBank.hidden = name !== 'bank';
+    [['home', ui.tabHome], ['play', ui.tabPlay], ['bank', ui.tabBank]].forEach(function (pair) {
+      if (pair[0] === name) pair[1].setAttribute('aria-current', 'page');
+      else pair[1].removeAttribute('aria-current');
+    });
+    closeDrawer();
     try {
-      history.replaceState(null, '', isBank ? '#bank' : location.pathname + location.search);
+      history.replaceState(null, '', name === 'bank' ? '#bank' : name === 'home' ? '#home' : location.pathname + location.search);
     } catch (e) {
       /* file:// or sandboxed */
     }
-    if (isBank) Bank.onShow();
+    if (name === 'bank') Bank.onShow();
+    if (name === 'home') renderHome();
+    if (wasHidden && isMobile()) window.scrollTo(0, 0);
+  }
+
+  function openDrawer() {
+    document.body.classList.add('drawer-open');
+    ui.btnMenu.setAttribute('aria-expanded', 'true');
+    ui.drawerBackdrop.hidden = false;
+    var current = ui.sidebar.querySelector('[aria-current="page"]') || ui.tabHome;
+    setTimeout(function () { current.focus({ preventScroll: true }); }, 60);
+  }
+
+  function closeDrawer() {
+    if (!document.body.classList.contains('drawer-open')) return;
+    document.body.classList.remove('drawer-open');
+    ui.btnMenu.setAttribute('aria-expanded', 'false');
+    ui.drawerBackdrop.hidden = true;
+  }
+
+  function goToPlay(pane) {
+    showTab('play');
+    showPane(pane || (S.started ? 'game' : 'new'));
+  }
+
+  function renderLevelChips() {
+    var first = Math.max(0, Math.min(LEVELS.length - 3, S.homeLevel - 1));
+    ui.levelChips.innerHTML = '';
+    for (var i = first; i < first + 3; i++) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'chip';
+      chip.setAttribute('role', 'radio');
+      chip.setAttribute('aria-checked', String(i === S.homeLevel));
+      chip.dataset.level = String(i);
+      chip.textContent = LEVELS[i].name;
+      chip.title = LEVELS[i].blurb;
+      ui.levelChips.appendChild(chip);
+    }
+  }
+
+  function renderHome() {
+    if (ui.viewHome.hidden) return;
+    var games = loadHistory();
+    var stats = loadStats();
+    var bank = C.BlunderBank.list();
+    var bankStats = C.BlunderBank.stats();
+
+    var streak = 0;
+    for (var i = 0; i < games.length && games[i].blunders === 0; i++) streak++;
+    ui.streakNum.textContent = String(streak);
+    ui.homeSub.textContent = streak > 0
+      ? streak + (streak === 1 ? ' clean game in a row' : ' clean games in a row')
+      : 'Finish a game with no blunders to start a streak';
+
+    renderLevelChips();
+    var colour = { w: 'White', b: 'Black', random: 'a random colour' }[S.colorChoice] || 'White';
+    ui.homeNote.textContent = 'You play ' + colour + '. Coach Guard is ' + (S.guardOn ? 'on' : 'off') + '.';
+    ui.btnHomeContinue.hidden = !(S.started && S.phase !== 'over' && S.game.history().length > 0);
+
+    ui.homePuzzleCount.textContent = String(bank.length);
+    if (bank.length) {
+      homeBoard.setOrientation(bank[0].color);
+      homeBoard.setFen(bank[0].fen);
+      ui.homePuzzleText.textContent = bank.length === 1
+        ? 'Find the move you missed in one of your games.'
+        : 'Find the moves you missed. Newest first.';
+      ui.btnHomePuzzle.textContent = 'Solve puzzle';
+    } else {
+      homeBoard.setOrientation('w');
+      homeBoard.setFen(START_FEN);
+      ui.homePuzzleText.textContent = bankStats.cleared
+        ? 'All clear. Blunders from new games will show up here.'
+        : 'No puzzles yet. Blunders from your games become puzzles here.';
+      ui.btnHomePuzzle.textContent = 'Play a game';
+    }
+
+    ui.historyList.innerHTML = '';
+    ui.historyEmpty.hidden = games.length > 0;
+    games.slice(0, 5).forEach(function (g) {
+      var li = document.createElement('li');
+      li.className = 'history-item';
+      var badge = document.createElement('span');
+      badge.className = 'result-badge result-' + g.result;
+      badge.textContent = g.result === 'win' ? 'W' : g.result === 'loss' ? 'L' : '½';
+      badge.setAttribute('aria-label', g.result === 'win' ? 'Win' : g.result === 'loss' ? 'Loss' : 'Draw');
+      var text = document.createElement('span');
+      text.className = 'history-text';
+      var title = document.createElement('span');
+      title.className = 'history-title';
+      var lvl = LEVELS[g.level] || LEVELS[2];
+      title.textContent = 'vs ' + lvl.name + ' bot';
+      var sub = document.createElement('span');
+      sub.className = 'history-sub';
+      var how = { checkmate: 'Checkmate', stalemate: 'Stalemate', repetition: 'Repetition', insufficient: 'Dead position', fifty: '50-move rule' }[g.how] || 'Finished';
+      sub.textContent = how + ', ' + g.moves + (g.moves === 1 ? ' move' : ' moves') + ' as ' + (g.color === 'b' ? 'Black' : 'White') + ', ' + relativeDay(g.at);
+      text.appendChild(title);
+      text.appendChild(sub);
+      var tag = document.createElement('span');
+      tag.className = 'history-tag ' + (g.blunders ? 'has-blunders' : 'is-clean');
+      tag.textContent = g.blunders ? g.blunders + (g.blunders === 1 ? ' blunder' : ' blunders') : 'Clean';
+      li.appendChild(badge);
+      li.appendChild(text);
+      li.appendChild(tag);
+      ui.historyList.appendChild(li);
+    });
+
+    ui.statGames.textContent = String(stats.games);
+    ui.statWins.textContent = String(stats.wins);
+    ui.statSaves.textContent = String(stats.saves);
+    ui.statSolved.textContent = String(bankStats.cleared);
+    ui.statWaiting.textContent = String(bank.length);
   }
 
   /* ======================================================================== */
@@ -2431,6 +2748,32 @@
       tabBank: $('tab-bank'),
       viewPlay: $('view-play'),
       viewBank: $('view-bank'),
+      viewHome: $('view-home'),
+      tabHome: $('tab-home'),
+      sidebar: $('sidebar'),
+      btnMenu: $('btnMenu'),
+      drawerBackdrop: $('drawerBackdrop'),
+      btnBankQuick: $('btnBankQuick'),
+      bankBadgeMobile: $('bankBadgeMobile'),
+      btnSoundQuick: $('btnSoundQuick'),
+      soundHelp: $('soundHelp'),
+      streakNum: $('streakNum'),
+      homeSub: $('homeSub'),
+      levelChips: $('levelChips'),
+      homeNote: $('homeNote'),
+      btnHomeStart: $('btnHomeStart'),
+      btnHomeContinue: $('btnHomeContinue'),
+      homePuzzleCount: $('homePuzzleCount'),
+      homePuzzleText: $('homePuzzleText'),
+      btnHomePuzzle: $('btnHomePuzzle'),
+      historyList: $('historyList'),
+      historyEmpty: $('historyEmpty'),
+      btnHistoryPlay: $('btnHistoryPlay'),
+      statGames: $('statGames'),
+      statWins: $('statWins'),
+      statSaves: $('statSaves'),
+      statSolved: $('statSolved'),
+      statWaiting: $('statWaiting'),
       soundToggle: $('soundToggle'),
       reviewBar: $('reviewBar'),
       reviewLabel: $('reviewLabel'),
@@ -2455,6 +2798,7 @@
       legalTargets: function (sq) { return legalTargets(S.game, sq); },
       onMove: function (from, to) { onPlayerMove(from, to); }
     });
+    homeBoard = new BoardView($('homeBoard'), {});
 
     renderLevelCards();
     ui.levelCards.addEventListener('click', function (e) {
@@ -2528,17 +2872,25 @@
     ui.btnFlip.addEventListener('click', flipBoard);
 
     // Sounds: browsers only allow audio after a click or key press.
-    Sound.setEnabled(S.soundOn);
-    ui.soundToggle.setAttribute('aria-checked', String(S.soundOn));
-    ui.soundToggle.addEventListener('click', function () {
-      S.soundOn = !S.soundOn;
-      Sound.setEnabled(S.soundOn);
-      ui.soundToggle.setAttribute('aria-checked', String(S.soundOn));
+    function applySound(on, announce) {
+      S.soundOn = on;
+      Sound.setEnabled(on);
+      ui.soundToggle.setAttribute('aria-checked', String(on));
+      ui.btnSoundQuick.setAttribute('aria-pressed', String(on));
+      ui.btnSoundQuick.setAttribute('aria-label', on ? 'Sounds on' : 'Sounds off');
+      ui.btnSoundQuick.classList.toggle('is-off', !on);
+      if (!announce) return;
       saveSettings();
-      if (S.soundOn) {
+      if (on) {
         Sound.unlock();
         setTimeout(function () { Sound.play('move'); }, 80);
       }
+    }
+    applySound(S.soundOn, false);
+    ui.soundToggle.addEventListener('click', function () { applySound(!S.soundOn, true); });
+    ui.btnSoundQuick.addEventListener('click', function () { applySound(!S.soundOn, true); });
+    Sound.onPack(function (recorded) {
+      if (recorded) ui.soundHelp.textContent = 'Playing the recorded sounds from your sounds folder.';
     });
     document.addEventListener('pointerdown', Sound.unlock, true);
     document.addEventListener('keydown', Sound.unlock, true);
@@ -2592,18 +2944,57 @@
       enterView(Math.round(((e.clientX - rect.left) / rect.width) * len));
     });
 
+    ui.tabHome.addEventListener('click', function () { showTab('home'); });
     ui.tabPlay.addEventListener('click', function () { showTab('play'); });
     ui.tabBank.addEventListener('click', function () { showTab('bank'); });
-    [ui.tabPlay, ui.tabBank].forEach(function (tab) {
-      tab.addEventListener('keydown', function (e) {
-        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-          e.preventDefault();
-          var goBank = tab === ui.tabPlay;
-          showTab(goBank ? 'bank' : 'play');
-          (goBank ? ui.tabBank : ui.tabPlay).focus();
-        }
+    $('navSettings').addEventListener('click', function () { goToPlay('settings'); });
+
+    ui.btnMenu.addEventListener('click', function () {
+      if (document.body.classList.contains('drawer-open')) closeDrawer();
+      else openDrawer();
+    });
+    ui.drawerBackdrop.addEventListener('click', closeDrawer);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && document.body.classList.contains('drawer-open')) {
+        closeDrawer();
+        ui.btnMenu.focus();
+      }
+    });
+    ui.btnBankQuick.addEventListener('click', function () { showTab('bank'); });
+
+    ui.levelChips.addEventListener('click', function (e) {
+      var chip = e.target.closest('[data-level]');
+      if (!chip) return;
+      S.homeLevel = parseInt(chip.dataset.level, 10) || 0;
+      renderLevelChips();
+    });
+    ui.btnHomeStart.addEventListener('click', function () {
+      if (S.phase === 'warning' || S.phase === 'promoting') return;
+      S.levelIndex = S.homeLevel;
+      saveSettings();
+      renderLevelCards();
+      newGame();
+      goToPlay('game');
+    });
+    ui.btnHomeContinue.addEventListener('click', function () { goToPlay('game'); });
+    Array.prototype.forEach.call(ui.viewHome.querySelectorAll('[data-go]'), function (btn) {
+      btn.addEventListener('click', function () {
+        var go = btn.dataset.go;
+        if (go === 'bank') showTab('bank');
+        else if (go === 'settings') goToPlay('settings');
+        else goToPlay('new');
       });
     });
+    ui.btnHomePuzzle.addEventListener('click', function () {
+      var list = C.BlunderBank.list();
+      if (list.length) {
+        showTab('bank');
+        Bank.open(list[0].id);
+      } else {
+        goToPlay();
+      }
+    });
+    ui.btnHistoryPlay.addEventListener('click', function () { goToPlay(); });
     Array.prototype.forEach.call(document.querySelectorAll('[data-goto="play"]'), function (b) {
       b.addEventListener('click', function () { showTab('play'); });
     });
@@ -2619,8 +3010,12 @@
     Bank.init();
     updateBankBadge();
     engine.start();
+    S.homeLevel = S.levelIndex;
     if (!restoreGame()) showHome();
-    if (location.hash === '#bank') showTab('bank');
+    var hash = location.hash;
+    if (hash === '#bank') showTab('bank');
+    else if (hash === '#home' || (hash !== '#play' && isMobile())) showTab('home');
+    else showTab('play');
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

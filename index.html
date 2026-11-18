@@ -75,27 +75,50 @@
 <body class="font-sans antialiased" data-board="green">
   <a href="#board" class="skip-link">Skip to the board</a>
 
+  <!-- Phone and tablet top bar -->
+  <header class="mobile-bar">
+    <button type="button" class="icon-btn" id="btnMenu" aria-label="Open menu" aria-expanded="false" aria-controls="sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 6.5h16M4 12h16M4 17.5h16"/></svg></button>
+    <a href="./" class="brand brand-bar" aria-label="Second Look, home">
+      <span class="brand-mark" aria-hidden="true">♞</span>
+      <span class="brand-name font-display">Second Look</span>
+    </a>
+    <div class="mobile-bar-actions">
+      <button type="button" class="icon-btn icon-btn-text" id="btnBankQuick" aria-label="My Blunder Bank">
+        <span aria-hidden="true">??</span>
+        <span class="icon-badge" id="bankBadgeMobile" hidden>0</span>
+      </button>
+      <button type="button" class="icon-btn" id="btnSoundQuick" aria-label="Sounds on" aria-pressed="true"><svg class="ico-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><svg class="ico-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
+    </div>
+  </header>
+  <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+
   <div class="shell">
     <!-- ================================================================ -->
     <!-- Sidebar                                                           -->
     <!-- ================================================================ -->
-    <aside class="sidebar" aria-label="Main navigation">
+    <aside class="sidebar" id="sidebar" aria-label="Main navigation">
       <a href="./" class="brand" aria-label="Second Look, home">
         <span class="brand-mark" aria-hidden="true">♞</span>
         <span class="brand-name font-display">Second Look</span>
       </a>
 
-      <nav class="nav" role="tablist" aria-orientation="vertical" aria-label="Sections">
-        <button type="button" class="nav-item" role="tab" id="tab-play" aria-controls="view-play" aria-selected="true">
-          <span class="nav-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 3h6v6H3zM15 3h6v6h-6zM9 9h6v6H9zM3 15h6v6H3zM15 15h6v6h-6z" fill="currentColor"/></svg>
-          </span>
+      <nav class="nav" aria-label="Sections">
+        <button type="button" class="nav-item" id="tab-home" data-view="home">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11.2 12 4l9 7.2V20a1 1 0 0 1-1 1h-5.2v-6.2H9.2V21H4a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
+          <span class="nav-label">Home</span>
+        </button>
+        <button type="button" class="nav-item" id="tab-play" data-view="play" aria-current="page">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 3h6v6H3zM15 3h6v6h-6zM9 9h6v6H9zM3 15h6v6H3zM15 15h6v6h-6z" fill="currentColor"/></svg></span>
           <span class="nav-label">Play</span>
         </button>
-        <button type="button" class="nav-item" role="tab" id="tab-bank" aria-controls="view-bank" aria-selected="false" tabindex="-1">
+        <button type="button" class="nav-item" id="tab-bank" data-view="bank">
           <span class="nav-icon nav-icon-text" aria-hidden="true">??</span>
           <span class="nav-label">Blunder Bank</span>
           <span class="tab-badge" id="bankBadge" aria-label="saved blunders">0</span>
+        </button>
+        <button type="button" class="nav-item" id="navSettings">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg></span>
+          <span class="nav-label">Settings</span>
         </button>
       </nav>
 
@@ -109,9 +132,81 @@
 
     <main class="main" id="main">
       <!-- ============================================================== -->
+      <!-- Home                                                            -->
+      <!-- ============================================================== -->
+      <section id="view-home" class="view home" aria-labelledby="homeTitle" hidden>
+        <h1 class="visually-hidden" id="homeTitle">Home</h1>
+        <div class="home-grid">
+          <div class="home-col">
+            <div class="home-profile">
+              <span class="avatar avatar-you" aria-hidden="true">♔</span>
+              <div class="home-profile-text">
+                <span class="home-name font-display">Your training</span>
+                <span class="home-sub" id="homeSub">Finish a game with no blunders to start a streak</span>
+              </div>
+              <div class="streak" title="Games in a row without a blunder">
+                <span class="streak-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.1-7.5 9.9-4.4-1.8-7.5-5.3-7.5-9.9V6z"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8" stroke-linecap="round"/></svg></span>
+                <span class="streak-num font-display" id="streakNum" aria-label="clean-game streak">0</span>
+              </div>
+            </div>
+
+            <section class="home-card" aria-labelledby="playCardTitle">
+              <h2 class="home-card-title font-display" id="playCardTitle">Play vs bot</h2>
+              <div class="chip-row" id="levelChips" role="radiogroup" aria-label="Bot level"></div>
+              <button type="button" class="btn btn-primary btn-big" id="btnHomeStart">Start game</button>
+              <p class="home-note" id="homeNote"></p>
+            </section>
+
+            <nav class="home-menu" aria-label="Shortcuts">
+              <button type="button" class="menu-btn" id="btnHomeContinue" hidden><span class="menu-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg></span><span>Continue game</span></button>
+              <button type="button" class="menu-btn" data-go="levels"><span class="menu-btn-icon menu-btn-glyph" aria-hidden="true">♞</span><span>All bot levels</span></button>
+              <button type="button" class="menu-btn" data-go="bank"><span class="menu-btn-icon menu-btn-text" aria-hidden="true">??</span><span>My Blunder Bank</span></button>
+              <button type="button" class="menu-btn" data-go="settings"><span class="menu-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg></span><span>Settings</span></button>
+            </nav>
+
+            <section class="home-card puzzle-card" aria-labelledby="puzzleCardTitle">
+              <div class="mini-board-wrap"><div id="homeBoard" class="board board-mini" aria-hidden="true"></div></div>
+              <div class="puzzle-card-side">
+                <div class="puzzle-card-head">
+                  <span class="puzzle-count" id="homePuzzleCount" aria-label="puzzles waiting">0</span>
+                  <h2 class="puzzle-card-title font-display" id="puzzleCardTitle">Your puzzles</h2>
+                </div>
+                <p class="puzzle-card-text" id="homePuzzleText">No puzzles yet.</p>
+                <button type="button" class="btn btn-ghost" id="btnHomePuzzle">Solve puzzle</button>
+              </div>
+            </section>
+          </div>
+
+          <div class="home-col">
+            <section class="home-card" aria-labelledby="historyTitle">
+              <h2 class="home-card-title font-display" id="historyTitle">Game history</h2>
+              <ul class="history-list" id="historyList"></ul>
+              <div class="empty-state" id="historyEmpty">
+                <span class="empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 3h6v6H3zM15 3h6v6h-6zM9 9h6v6H9zM3 15h6v6H3zM15 15h6v6h-6z" fill="currentColor"/></svg></span>
+                <p class="empty-title font-display">No games yet</p>
+                <p class="empty-text">Finished games show up here.</p>
+                <button type="button" class="btn btn-primary" id="btnHistoryPlay">Play</button>
+              </div>
+            </section>
+
+            <section class="home-card" aria-labelledby="statsTitle">
+              <h2 class="home-card-title font-display" id="statsTitle">Your stats</h2>
+              <div class="stat-grid">
+                <div class="stat-tile"><span class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 3h6v6H3zM15 3h6v6h-6zM9 9h6v6H9zM3 15h6v6H3zM15 15h6v6h-6z" fill="currentColor"/></svg></span><span class="stat-value font-display" id="statGames">0</span><span class="stat-label">Games played</span></div>
+                <div class="stat-tile"><span class="stat-icon stat-glyph" aria-hidden="true">♔</span><span class="stat-value font-display" id="statWins">0</span><span class="stat-label">Wins</span></div>
+                <div class="stat-tile"><span class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l7.5 3v5.5c0 4.6-3.1 8.1-7.5 9.9-4.4-1.8-7.5-5.3-7.5-9.9V6z"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8" stroke-linecap="round"/></svg></span><span class="stat-value font-display" id="statSaves">0</span><span class="stat-label">Coach Guard saves</span></div>
+                <div class="stat-tile"><span class="stat-icon stat-text" aria-hidden="true">✓</span><span class="stat-value font-display" id="statSolved">0</span><span class="stat-label">Puzzles solved</span></div>
+                <div class="stat-tile"><span class="stat-icon stat-text" aria-hidden="true">??</span><span class="stat-value font-display" id="statWaiting">0</span><span class="stat-label">Puzzles waiting</span></div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
       <!-- Play                                                            -->
       <!-- ============================================================== -->
-      <section id="view-play" role="tabpanel" aria-labelledby="tab-play" class="view view-grid">
+      <section id="view-play" class="view view-grid" aria-label="Play">
         <div class="play-col">
           <div class="player-strip" id="stripTop">
             <span class="avatar" id="topAvatar" aria-hidden="true">♞</span>
@@ -272,7 +367,7 @@
       <!-- ============================================================== -->
       <!-- My Blunder Bank                                                 -->
       <!-- ============================================================== -->
-      <section id="view-bank" role="tabpanel" aria-labelledby="tab-bank" class="view view-grid" hidden>
+      <section id="view-bank" class="view view-grid" aria-label="My Blunder Bank" hidden>
         <div class="play-col">
           <div class="player-strip">
             <span class="avatar avatar-you" aria-hidden="true">??</span>
