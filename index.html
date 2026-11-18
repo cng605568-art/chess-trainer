@@ -165,6 +165,15 @@
       </nav>
 
       <div class="sidebar-foot">
+        <label class="lang-pick">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.8 3.8 5.8 3.8 9s-1.2 6.2-3.8 9c-2.6-2.8-3.8-5.8-3.8-9S9.4 5.8 12 3Z"/></svg>
+          <span class="visually-hidden">Language</span>
+          <select id="langSelect">
+            <option value="en" lang="en">English</option>
+            <option value="ms" lang="ms">Bahasa Melayu</option>
+            <option value="zh" lang="zh-Hans">中文</option>
+          </select>
+        </label>
         <div class="engine-pill" id="enginePill" data-state="loading" role="status" aria-live="polite">
           <span class="engine-dot" aria-hidden="true"></span>
           <span id="engineText">Loading Stockfish…</span>
@@ -479,6 +488,14 @@
                 <button type="button" class="switch" id="soundToggle" role="switch" aria-checked="true" aria-labelledby="soundLabel" aria-describedby="soundHelp"><span class="switch-knob"></span></button>
               </div>
               <fieldset class="setting setting-stack">
+                <legend class="setting-name">Language</legend>
+                <div class="segmented segmented-3 lang-choice" role="radiogroup" aria-label="Language">
+                  <label><input type="radio" name="lang" value="en"><span lang="en">English</span></label>
+                  <label><input type="radio" name="lang" value="ms"><span lang="ms">Bahasa Melayu</span></label>
+                  <label><input type="radio" name="lang" value="zh"><span lang="zh-Hans">中文</span></label>
+                </div>
+              </fieldset>
+              <fieldset class="setting setting-stack">
                 <legend class="setting-name">Board colour</legend>
                 <div class="swatches" role="radiogroup" aria-label="Board colour">
                   <label class="swatch"><input type="radio" name="boardTheme" value="green" checked><span class="swatch-board swatch-green" aria-hidden="true"></span><span class="swatch-name">Green</span></label>
@@ -761,6 +778,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
   <script>
     window.Chess || document.write('<script src="https://cdn.jsdelivr.net/npm/chess.js@0.10.3/chess.js"><\/script>');
+  </script>
+  <script src="./i18n.js"></script>
+  <script>
+    if (window.I18N && I18N.lang !== 'en') document.write('<script src="./lang.js"><\/script>');
   </script>
   <script src="./coach.js"></script>
   <script src="./lessons.js"></script>

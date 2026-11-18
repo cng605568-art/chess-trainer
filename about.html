@@ -171,5 +171,15 @@
   <footer>
     <p>Engine: Stockfish 10 (GPLv3) via stockfish.js. Rules: chess.js. Pieces: Cburnett, CC BY-SA 3.0, via Wikimedia Commons. Puzzles: the Lichess puzzle database (public domain).</p>
   </footer>
+  <script src="./i18n.js"></script>
+  <script>
+    if (window.I18N && I18N.lang !== 'en') document.write('<script src="./lang.js"><\/script>');
+  </script>
+  <script>
+    if (window.I18N && I18N.lang !== 'en') {
+      I18N.translateDom(document.body);
+      document.title = T(document.title);
+    }
+  </script>
 </body>
 </html>

@@ -17,6 +17,8 @@ var SHELL = [
   './style.css',
   './app.js',
   './coach.js',
+  './i18n.js',
+  './lang.js',
   './stockfish-worker.js',
   './puzzles.json',
   './lessons.js',

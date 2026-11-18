@@ -9,12 +9,13 @@
   'use strict';
 
   var C = window.Coach;
+  var T = (C && C.T) || window.T || function (x) { return x; };
   var $ = function (id) { return document.getElementById(id); };
 
   if (typeof window.Chess !== 'function' || !C) {
     var msg = document.createElement('div');
     msg.className = 'fatal-banner';
-    msg.textContent = 'The chess rules library could not be loaded. Check your connection and reload the page.';
+    msg.textContent = (window.T || String)('The chess rules library could not be loaded. Check your connection and reload the page.');
     document.body.prepend(msg);
     return;
   }
@@ -31,6 +32,26 @@
     { name: 'Strong', glyph: '♛', blurb: 'Plays like a strong tournament player. Expect a real fight.', skill: 15, depth: 12, movetime: 800, random: 0 },
     { name: 'Full Stockfish', glyph: '♚', blurb: 'The computer at full strength. Almost impossible to beat, but fun to watch.', skill: 20, depth: 18, movetime: 1500, random: 0 }
   ];
+
+  /** Pick the singular or plural template for a count; both use {n}. */
+  function plural(n, one, many, params) {
+    var p = { n: n };
+    if (params) Object.keys(params).forEach(function (k) { p[k] = params[k]; });
+    return T(n === 1 ? one : many, p);
+  }
+
+  function levelName(i) {
+    return T(LEVELS[i] ? LEVELS[i].name : LEVELS[2].name);
+  }
+
+  function levelBlurb(i) {
+    return T(LEVELS[i] ? LEVELS[i].blurb : '');
+  }
+
+  /** "the Casual bot" in the current language. */
+  function botName(i) {
+    return T('the {level} bot', { level: levelName(i) });
+  }
 
   var ANALYSIS = { depth: 12, movetime: 900 };
   var PUZZLE_ANALYSIS = { depth: 12, movetime: 900 };
@@ -200,10 +221,15 @@
     pieceFallbackListeners.forEach(function (fn) { fn(); });
   }
 
+  /** "White rook", in the current language. */
+  function pieceLabel(c, t) {
+    return T('{color} {piece}', { color: C.colorName(c), piece: C.pieceName(t) });
+  }
+
   /** p: { t: 'n', c: 'w' } */
   function createPieceEl(p, extraClass) {
     var code = p.c + p.t.toUpperCase();
-    var label = C.COLOR_NAMES[p.c] + ' ' + C.NAMES[p.t];
+    var label = pieceLabel(p.c, p.t);
     var el;
     if (!useGlyphs && PIECE_URLS[code]) {
       el = document.createElement('img');
@@ -729,7 +755,7 @@
       var slot = this.slots[i];
       slot.innerHTML = '';
       if (p) slot.appendChild(createPieceEl(p));
-      this.squareEls[i].setAttribute('aria-label', C.idxToSq(i) + (p ? ', ' + C.COLOR_NAMES[p.c] + ' ' + C.NAMES[p.t] : ''));
+      this.squareEls[i].setAttribute('aria-label', C.idxToSq(i) + (p ? ', ' + pieceLabel(p.c, p.t) : ''));
     }
   };
 
@@ -937,7 +963,7 @@
     var self = this;
     var flavor = this.flavors[this.flavorIndex];
     this.ready = false;
-    this.onStatus({ state: 'loading', flavor: flavor, text: flavor === 'stockfish' ? 'Loading Stockfish…' : 'Starting backup engine…' });
+    this.onStatus({ state: 'loading', flavor: flavor, text: flavor === 'stockfish' ? T('Loading Stockfish…') : T('Starting backup engine…') });
     var w;
     try {
       w = new Worker('./stockfish-worker.js?engine=' + flavor);
@@ -967,12 +993,12 @@
     this.ready = false;
     if (this.flavorIndex < this.flavors.length - 1) {
       this.flavorIndex++;
-      this.onStatus({ state: 'fallback', text: 'Stockfish unavailable. Switching to the backup engine…', reason: reason });
+      this.onStatus({ state: 'fallback', text: T('Stockfish unavailable. Switching to the backup engine…'), reason: reason });
       this._spawn();
       return;
     }
     this.failed = true;
-    this.onStatus({ state: 'error', text: 'No engine available', reason: reason });
+    this.onStatus({ state: 'error', text: T('No engine available'), reason: reason });
     this.pending.forEach(function (p) {
       clearTimeout(p.timer);
       p.resolve(null);
@@ -992,7 +1018,7 @@
         this.ready = true;
         this.name = msg.engine || 'Stockfish';
         this.flavor = msg.flavor;
-        this.onStatus({ state: 'ready', flavor: msg.flavor, text: msg.flavor === 'lite' ? 'Backup engine ready' : this.name.replace(/\s+64.*$/, '') + ' ready' });
+        this.onStatus({ state: 'ready', flavor: msg.flavor, text: msg.flavor === 'lite' ? T('Backup engine ready') : T('{name} ready', { name: this.name.replace(/\s+64.*$/, '') }) });
         // Send anything that queued while loading (or was lost in a restart).
         this.pending.forEach(function (p, id) {
           if (p.sentTo !== w) self._send(id);
@@ -1284,7 +1310,7 @@
   var dailyBoard;
 
   function oppColor() { return C.opposite(S.playerColor); }
-  function oppName() { return C.COLOR_NAMES[oppColor()]; }
+  function oppName() { return C.colorName(oppColor()); }
 
   function loadSettings() {
     var raw = store.get(SETTINGS_KEY);
@@ -1297,6 +1323,7 @@
       if (s.colorChoice === 'w' || s.colorChoice === 'b' || s.colorChoice === 'random') S.colorChoice = s.colorChoice;
       if (typeof s.soundOn === 'boolean') S.soundOn = s.soundOn;
       if (typeof s.installSnoozedUntil === 'number') S.installSnoozedUntil = s.installSnoozedUntil;
+      if (window.I18N && Object.prototype.hasOwnProperty.call(window.I18N.langs, s.lang)) S.lang = s.lang;
       if (typeof s.timeChoice === 'string' && Object.prototype.hasOwnProperty.call(TIME_CONTROLS, s.timeChoice)) S.timeChoice = s.timeChoice;
       if (s.boardThemeChosen === true && (s.boardTheme === 'grey' || s.boardTheme === 'green' || s.boardTheme === 'brown')) {
         S.boardTheme = s.boardTheme;
@@ -1317,7 +1344,8 @@
       timeChoice: S.timeChoice,
       installSnoozedUntil: S.installSnoozedUntil,
       boardTheme: S.boardTheme,
-      boardThemeChosen: S.boardThemeChosen
+      boardThemeChosen: S.boardThemeChosen,
+      lang: S.lang || undefined
     }));
   }
 
@@ -1547,16 +1575,16 @@
     if (s.reason) ui.enginePill.title = s.reason;
     if (s.state === 'fallback' && !S.engineNoticeShown) {
       S.engineNoticeShown = true;
-      S.engineNotice = { tone: 'warn', icon: '!', text: "The full computer coach couldn't load, so a simpler backup engine is running. It still warns you about mistakes, but it may miss a few." };
+      S.engineNotice = { tone: 'warn', icon: '!', text: T("The full computer coach couldn't load, so a simpler backup engine is running. It still warns you about mistakes, but it may miss a few.") };
       pushNotes([S.engineNotice], 'Engine');
     }
     if (s.state === 'error') {
-      S.engineNotice = { tone: 'bad', icon: '✕', text: "The computer coach couldn't start, so mistake warnings are off and the bot plays simple moves. Reload the page to try again." };
+      S.engineNotice = { tone: 'bad', icon: '✕', text: T("The computer coach couldn't start, so mistake warnings are off and the bot plays simple moves. Reload the page to try again.") };
       pushNotes([S.engineNotice], 'Engine');
       if (S.phase === 'checking' || S.phase === 'player') refreshStatusForPhase();
     }
     if (s.state === 'ready' && S.phase === 'bot') {
-      setStatus(LEVELS[S.levelIndex].name + ' bot is thinking…', 'bot');
+      setStatus(T('{level} bot is thinking…', { level: levelName(S.levelIndex) }), 'bot');
     }
   }
 
@@ -1568,7 +1596,7 @@
 
   function refreshStatusForPhase() {
     if (S.phase === 'player') {
-      setStatus(ChessAPI.inCheck(S.game) ? "Check! It's your move." : 'Your move.', 'you');
+      setStatus(ChessAPI.inCheck(S.game) ? T("Check! It's your move.") : T('Your move.'), 'you');
     }
   }
 
@@ -1618,8 +1646,8 @@
 
   function resetEval() {
     ui.evalFill.style.height = '50%';
-    ui.evalChip.textContent = 'Even';
-    ui.evalBar.setAttribute('aria-label', 'Even');
+    ui.evalChip.textContent = T('Even');
+    ui.evalBar.setAttribute('aria-label', T('Even'));
   }
 
   function applyEvalVisibility() {
@@ -1638,7 +1666,7 @@
     if (!hist.length) {
       var empty = document.createElement('li');
       empty.className = 'movelist-empty';
-      empty.textContent = 'No moves yet.';
+      empty.textContent = T('No moves yet.');
       ol.appendChild(empty);
       return;
     }
@@ -1667,13 +1695,13 @@
         if (mark) {
           btn.dataset.note = mark;
           btn.classList.add('q-' + q.cls);
-          btn.title = QUALITY_NAMES[q.cls] + ': ' + C.lossLike(q.drop);
+          btn.title = T('{kind}: {loss}', { kind: T(QUALITY_NAMES[q.cls]), loss: C.lossLike(q.drop) });
         }
         if (ply === current) {
           btn.classList.add('is-current');
           btn.setAttribute('aria-current', 'step');
         }
-        btn.setAttribute('aria-label', 'Move ' + Math.ceil(ply / 2) + ', ' + C.COLOR_NAMES[m.color] + ' ' + m.san + (mark ? ', ' + q.cls : '') + '. Show this position.');
+        btn.setAttribute('aria-label', T('Move {n}, {color} {san}{mark}. Show this position.', { n: Math.ceil(ply / 2), color: C.colorName(m.color), san: m.san, mark: mark ? ', ' + T(QUALITY_NAMES[q.cls]) : '' }));
         li.appendChild(btn);
       });
       ol.appendChild(li);
@@ -1691,10 +1719,10 @@
     function fill(color, nameEl, sideEl, capsEl, advEl, avatarEl, clockEl) {
       var isMe = color === S.playerColor;
       if (S.started) {
-        nameEl.textContent = isMe ? 'You' : lvl.name + ' bot';
-        sideEl.textContent = '(' + C.COLOR_NAMES[color] + ')';
+        nameEl.textContent = isMe ? T('You') : T('{level} bot', { level: levelName(S.levelIndex) });
+        sideEl.textContent = '(' + C.colorName(color) + ')';
       } else {
-        nameEl.textContent = isMe ? 'You' : 'Opponent';
+        nameEl.textContent = isMe ? T('You') : T('Opponent');
         sideEl.textContent = '';
       }
       if (isMe) {
@@ -1712,8 +1740,9 @@
       list.forEach(function (t) { capsEl.appendChild(createPieceEl({ t: t, c: C.opposite(color) }, 'cap')); });
       var diff = color === 'w' ? caps.diff : -caps.diff;
       advEl.textContent = diff > 0 ? '+' + diff : '';
-      var who = isMe ? 'Your' : (S.started ? 'The ' + lvl.name + " bot's" : "Opponent's");
-      clockEl.setAttribute('aria-label', who + (Clock.countdown() ? ' clock, time left' : ' clock, time used'));
+      clockEl.setAttribute('aria-label', isMe
+        ? (Clock.countdown() ? T('Your clock, time left') : T('Your clock, time used'))
+        : (Clock.countdown() ? T("The bot's clock, time left") : T("The bot's clock, time used")));
     }
     fill(topColor, ui.topName, ui.topSide, ui.topCaps, ui.topAdv, ui.topAvatar, ui.topClock);
     fill(bottomColor, ui.bottomName, ui.bottomSide, ui.bottomCaps, ui.bottomAdv, ui.bottomAvatar, ui.bottomClock);
@@ -1804,12 +1833,10 @@
     Sound.play('start');
     if (S.engineNotice) pushNotes([S.engineNotice], 'Engine');
     if (opts.retry || S.startFen) {
-      var mine = S.playerColor === 'w' ? 'White' : 'Black';
       var tipText = opts.retry && opts.retry.move
-        ? "Let's try that moment again. Last time you chose to " + C.moveAction(opts.retry.move, true) + ', which was ' + C.lossLike(opts.retry.drop || 0) +
-          '. Take a second look: what can the bot do after your move?'
-        : 'Playing on from this position. You are ' + mine + ', against the ' + LEVELS[S.levelIndex].name + ' bot.';
-      pushNotes([{ tone: 'tip', icon: '↻', text: tipText }], opts.retry ? 'Try again' : 'Play from here');
+        ? T("Let's try that moment again. Last time you chose to {move}, which was {loss}. Take a second look: what can the bot do after your move?", { move: C.moveAction(opts.retry.move, true), loss: C.lossLike(opts.retry.drop || 0) })
+        : T('Playing on from this position. You are {color}, against {bot}.', { color: C.colorName(S.playerColor), bot: botName(S.levelIndex) });
+      pushNotes([{ tone: 'tip', icon: '↻', text: tipText }], opts.retry ? T('Try again') : T('Play from here'));
       saveGame();
       if (S.game.turn() === S.playerColor) playerTurn(null);
       else botTurn();
@@ -1818,14 +1845,17 @@
     pushNotes([{
       tone: 'tip',
       icon: '♔',
-      text: "New game! You're playing the " + (S.playerColor === 'w' ? 'white pieces, so you move first' : 'black pieces, so the bot moves first') +
-        '. Your opponent is the ' + LEVELS[S.levelIndex].name + ' bot. ' +
-        (S.guardOn ? "Coach Guard is on, so I'll stop you before a big mistake and explain why." : "Coach Guard is off, but your big mistakes are still saved in My Blunder Bank.")
+      text: C.joinSentences([
+        S.playerColor === 'w'
+          ? T("New game! You're playing the white pieces, so you move first. Your opponent is {bot}.", { bot: botName(S.levelIndex) })
+          : T("New game! You're playing the black pieces, so the bot moves first. Your opponent is {bot}.", { bot: botName(S.levelIndex) }),
+        S.guardOn ? T("Coach Guard is on, so I'll stop you before a big mistake and explain why.") : T('Coach Guard is off, but your big mistakes are still saved in My Blunder Bank.')
+      ])
     }].concat(loadStats().games < 3 ? [{
       tone: 'tip',
       icon: '?',
-      text: 'Each square has a name made of a letter and a number, like e4. The letters run along the bottom edge of the board, the numbers up the side. The coach uses these names to point at squares.'
-    }] : []), 'Start');
+      text: T('Each square has a name made of a letter and a number, like e4. The letters run along the bottom edge of the board, the numbers up the side. The coach uses these names to point at squares.')
+    }] : []), T('Start'));
     saveGame();
     if (S.game.turn() === S.playerColor) playerTurn(null);
     else botTurn();
@@ -1874,7 +1904,7 @@
     showPane('game');
     ui.feed.innerHTML = '';
     if (S.engineNotice) pushNotes([S.engineNotice], 'Engine');
-    pushNotes([{ tone: 'tip', icon: '♔', text: 'Welcome back. Your game is restored right where you left it.' }], 'Resumed');
+    pushNotes([{ tone: 'tip', icon: '♔', text: T('Welcome back. Your game is restored right where you left it.') }], T('Resumed'));
     if (S.game.turn() === S.playerColor) playerTurn(null);
     else botTurn();
     return true;
@@ -1887,7 +1917,7 @@
     var fen = S.game.fen();
     var ply = S.game.history().length;
     var epoch = S.epoch;
-    setStatus(ChessAPI.inCheck(S.game) ? "Check! It's your move." : 'Your move.', 'you');
+    setStatus(ChessAPI.inCheck(S.game) ? T("Check! It's your move.") : T('Your move.'), 'you');
     refreshControls();
     // Look at the position while the player thinks: this is the "before"
     // evaluation the Coach Guard compares against.
@@ -1965,7 +1995,7 @@
     renderMoveList();
     renderStrips();
     refreshControls();
-    setStatus(engine.failed ? 'Playing your move…' : 'Coach is checking your move…', 'busy');
+    setStatus(engine.failed ? T('Playing your move…') : T('Coach is checking your move…'), 'busy');
 
     var before = await analyze(fenBefore);
     if (epoch !== S.epoch) return;
@@ -2015,7 +2045,7 @@
         refreshControls();
         board.setMarks({ danger: explanation.dangerSquares });
         board.setArrows(explanation.threat ? [{ from: explanation.threat.from, to: explanation.threat.to, color: 'red' }] : []);
-        setStatus('Coach Guard: take a second look.', 'warn');
+        setStatus(T('Coach Guard: take a second look.'), 'warn');
         Sound.play('warning');
         var choice = await showGuard({ message: explanation.message, evalBefore: verdict.pBefore, evalAfter: verdict.pAfter });
         if (epoch !== S.epoch) return;
@@ -2034,9 +2064,9 @@
           renderMoveList();
           renderStrips();
           var watch = explanation.threat
-            ? ' Before you move again, look at what the bot could do on ' + explanation.threat.to + '.'
-            : ' Look for a safer move.';
-          pushNotes([{ tone: 'good', icon: '↶', text: 'Good call taking it back.' + watch }], moveLabel(mv) + ' (taken back)');
+            ? T('Before you move again, look at what the bot could do on {sq}.', { sq: explanation.threat.to })
+            : T('Look for a safer move.');
+          pushNotes([{ tone: 'good', icon: '↶', text: C.joinSentences([T('Good call taking it back.'), watch]) }], T('{move} (taken back)', { move: moveLabel(mv) }));
           playerTurn(null);
           return;
         }
@@ -2092,7 +2122,7 @@
     var lvl = LEVELS[S.levelIndex];
     var botColor = oppColor();
     Clock.run(botColor);
-    setStatus(engine.ready || engine.failed ? lvl.name + ' bot is thinking…' : 'Waiting for the computer to load…', 'bot');
+    setStatus(engine.ready || engine.failed ? T('{level} bot is thinking…', { level: levelName(S.levelIndex) }) : T('Waiting for the computer to load…'), 'bot');
     // Short on time, the bot moves faster, like a person would.
     var botLeft = Clock.countdown() ? Clock.value(botColor) : Infinity;
     var movetime = botLeft < 30000 ? Math.min(lvl.movetime, 150) : botLeft < 90000 ? Math.min(lvl.movetime, 400) : lvl.movetime;
@@ -2164,8 +2194,8 @@
       var won = S.game.turn() !== S.playerColor;
       return {
         result: won ? 'win' : 'loss',
-        status: won ? 'Checkmate. You win!' : 'Checkmate. The bot wins.',
-        summary: won ? 'You won by checkmate!' : 'The bot won by checkmate.'
+        status: won ? T('Checkmate. You win!') : T('Checkmate. The bot wins.'),
+        summary: won ? T('You won by checkmate!') : T('The bot won by checkmate.')
       };
     }
     if (term === 'timeout') {
@@ -2173,17 +2203,16 @@
       var winner = C.opposite(loser);
       var playerFlagged = loser === S.playerColor;
       if (cannotMate(S.game, winner)) {
-        var who = playerFlagged ? 'the bot' : 'you';
         return {
           result: 'draw',
-          status: 'Draw. Time ran out, but ' + who + " can't checkmate with what's left.",
-          summary: 'Draw: time ran out, but ' + who + " had no way to checkmate."
+          status: playerFlagged ? T("Draw. Time ran out, but the bot can't checkmate with what's left.") : T("Draw. Time ran out, but you can't checkmate with what's left."),
+          summary: playerFlagged ? T('Draw: time ran out, but the bot had no way to checkmate.') : T('Draw: time ran out, but you had no way to checkmate.')
         };
       }
       return {
         result: playerFlagged ? 'loss' : 'win',
-        status: playerFlagged ? 'You ran out of time. The bot wins.' : 'The bot ran out of time. You win!',
-        summary: playerFlagged ? 'The bot won on time.' : 'You won on time!'
+        status: playerFlagged ? T('You ran out of time. The bot wins.') : T('The bot ran out of time. You win!'),
+        summary: playerFlagged ? T('The bot won on time.') : T('You won on time!')
       };
     }
     var reason = {
@@ -2192,7 +2221,7 @@
       insufficient: ['Draw: not enough pieces left to checkmate.', 'Draw: not enough pieces left to checkmate.'],
       fifty: ['Draw: 50 moves with no capture and no pawn move.', 'Draw by the 50-move rule.']
     }[term] || ['Draw.', 'Draw.'];
-    return { result: 'draw', status: reason[0], summary: reason[1] };
+    return { result: 'draw', status: T(reason[0]), summary: T(reason[1]) };
   }
 
   function endGame(term) {
@@ -2203,8 +2232,8 @@
     var outcome = gameOutcome(term);
     outcome.how = term;
     S.lastOutcome = outcome;
-    setStatus(outcome.status, 'over', 'Replay the game to see where it turned, or start a new one.');
-    ui.evalChip.textContent = outcome.result === 'win' ? 'You won' : outcome.result === 'loss' ? 'Bot won' : 'Draw';
+    setStatus(outcome.status, 'over', T('Replay the game to see where it turned, or start a new one.'));
+    ui.evalChip.textContent = outcome.result === 'win' ? T('You won') : outcome.result === 'loss' ? T('Bot won') : T('Draw');
     refreshControls();
     Sound.play(outcome.result === 'win' ? 'win' : outcome.result === 'loss' ? 'lose' : 'draw');
     recordGame(term, outcome.result);
@@ -2216,9 +2245,11 @@
       moves: Math.ceil(S.game.history().length / 2)
     });
     var summary = S.bankedThisGame > 0
-      ? 'This game added ' + S.bankedThisGame + (S.bankedThisGame === 1 ? ' big mistake' : ' big mistakes') + ' to My Blunder Bank as puzzles. Solving them is the best way to stop making the same mistake again.'
-      : 'No big mistakes this game. Nicely done!';
-    pushNotes([{ tone: 'tip', icon: '♔', text: summary }], 'Game over');
+      ? (S.bankedThisGame === 1
+        ? T('This game added 1 big mistake to My Blunder Bank as a puzzle. Solving it is the best way to stop making the same mistake again.')
+        : T('This game added {n} big mistakes to My Blunder Bank as puzzles. Solving them is the best way to stop making the same mistake again.', { n: S.bankedThisGame }))
+      : T('No big mistakes this game. Nicely done!');
+    pushNotes([{ tone: 'tip', icon: '♔', text: summary }], T('Game over'));
     showSummary(term);
   }
 
@@ -2246,7 +2277,7 @@
     renderStrips();
     S.phase = 'player';
     saveGame();
-    pushNotes([{ tone: 'tip', icon: '↶', text: 'Move taken back. Have another look before you play.' }], 'Take back');
+    pushNotes([{ tone: 'tip', icon: '↶', text: T('Move taken back. Have another look before you play.') }], T('Take back'));
     playerTurn(null);
   }
 
@@ -2256,32 +2287,32 @@
     var fen = S.game.fen();
     var epoch = S.epoch;
     ui.btnHint.disabled = true;
-    ui.btnHint.textContent = 'Thinking…';
+    ui.btnHint.textContent = T('Thinking…');
     var a = await analyze(fen);
-    ui.btnHint.textContent = 'Show hint';
+    ui.btnHint.textContent = T('Show hint');
     if (epoch !== S.epoch || S.game.fen() !== fen || S.phase !== 'player' || S.viewPly !== null) {
       refreshControls();
       return;
     }
     refreshControls();
     if (!a || !a.bestMove) {
-      pushNotes([{ tone: 'tip', icon: '?', text: 'The computer coach is still loading. Try the hint again in a moment.' }], 'Hint');
+      pushNotes([{ tone: 'tip', icon: '?', text: T('The computer coach is still loading. Try the hint again in a moment.') }], T('Hint'));
       return;
     }
     var mv = uciToMove(a.bestMove);
     var p = C.parseFen(fen).board[C.sqToIdx(mv.from)];
-    var pieceName = p ? C.NAMES[p.t] : 'piece';
+    var pieceName = p ? C.pieceName(p.t) : T('piece');
     Sound.play('hint');
     if (S.hintStage === 0) {
       S.hintStage = 1;
       board.setMarks({ hint: [mv.from] });
-      pushNotes([{ tone: 'tip', icon: '?', text: 'Hint: look at your ' + pieceName + ' on ' + mv.from + ' (the highlighted square). Press Show hint again to see the whole move.' }], 'Hint');
+      pushNotes([{ tone: 'tip', icon: '?', text: T('Hint: look at your {piece} on {sq} (the highlighted square). Press Show hint again to see the whole move.', { piece: pieceName, sq: mv.from }) }], T('Hint'));
     } else {
       S.hintStage = 2;
       board.setMarks({ hint: [mv.from] });
       board.setArrows([{ from: mv.from, to: mv.to, color: 'green' }]);
       var bestMv = describeUci(fen, a.bestMove);
-      pushNotes([{ tone: 'tip', icon: '?', text: 'The best move here: ' + (bestMv ? C.moveAction(bestMv, true) : sanOf(fen, a.bestMove)) + '. Follow the green arrow.' }], 'Hint');
+      pushNotes([{ tone: 'tip', icon: '?', text: T('The best move here: {move}. Follow the green arrow.', { move: bestMv ? C.moveAction(bestMv, true) : sanOf(fen, a.bestMove) }) }], T('Hint'));
     }
   }
 
@@ -2350,10 +2381,10 @@
     if (!viewing) return;
     var hist = S.game.history({ verbose: true });
     if (S.viewPly === 0) {
-      ui.reviewLabel.textContent = 'Start position';
+      ui.reviewLabel.textContent = T('Start position');
     } else {
       var m = hist[S.viewPly - 1];
-      ui.reviewLabel.textContent = 'Move ' + Math.ceil(S.viewPly / 2) + (m.color === 'w' ? '. ' : '… ') + m.san;
+      ui.reviewLabel.textContent = T(m.color === 'w' ? 'Move {n}. {san}' : 'Move {n}… {san}', { n: Math.ceil(S.viewPly / 2), san: m.san });
     }
   }
 
@@ -2385,17 +2416,17 @@
     });
     var lines = [];
     if (rated) {
-      lines.push((counts.best + counts.good) + ' of your ' + rated + (rated === 1 ? ' move was' : ' moves were') + ' good or best.');
+      lines.push(rated === 1 ? T('{n} of your 1 move was good or best.', { n: counts.best + counts.good }) : T('{n} of your {total} moves were good or best.', { n: counts.best + counts.good, total: rated }));
     } else {
-      lines.push("This game has no move ratings, because the computer coach wasn't running or the page was reloaded during the game.");
+      lines.push(T("This game has no move ratings, because the computer coach wasn't running or the page was reloaded during the game."));
     }
-    if (S.review.saves) lines.push('Coach Guard saved you ' + S.review.saves + (S.review.saves === 1 ? ' time.' : ' times.'));
-    ui.summaryLine.textContent = lines.join(' ');
+    if (S.review.saves) lines.push(S.review.saves === 1 ? T('Coach Guard saved you 1 time.') : T('Coach Guard saved you {n} times.', { n: S.review.saves }));
+    ui.summaryLine.textContent = C.joinSentences(lines);
     drawEvalGraph(hist.length);
     ui.btnSummaryBank.hidden = S.bankedThisGame === 0;
-    ui.btnSummaryBank.textContent = S.bankedThisGame === 1 ? 'Practice this mistake' : 'Practice these ' + S.bankedThisGame + ' mistakes';
+    ui.btnSummaryBank.textContent = S.bankedThisGame === 1 ? T('Practice this mistake') : T('Practice these {n} mistakes', { n: S.bankedThisGame });
     S.summaryStartPly = firstBlunder ? firstBlunder - 1 : 0;
-    ui.btnSummaryReview.textContent = firstBlunder ? 'Replay from your first big mistake' : 'Replay the game';
+    ui.btnSummaryReview.textContent = firstBlunder ? T('Replay from your first big mistake') : T('Replay the game');
     ui.summaryPanel.hidden = false;
   }
 
@@ -2441,17 +2472,21 @@
       text.className = 'moment-text';
       var title = document.createElement('span');
       title.className = 'moment-title';
-      title.textContent = 'Move ' + Math.ceil(mo.ply / 2) + '. ' + C.moveTitle(mo.move, mo.mine);
+      title.textContent = T('Move {n}. {move}', { n: Math.ceil(mo.ply / 2), move: C.moveTitle(mo.move, mo.mine) });
       var sub = document.createElement('span');
       sub.className = 'moment-sub';
       if (mo.mine) {
         var bestMv = mo.q.best ? describeUci(gameAtPly(mo.ply - 1).fen(), mo.q.best) : null;
-        sub.textContent = (mo.q.cls === 'blunder' ? 'Big mistake: ' : 'Mistake: ') + 'that was ' + C.lossLike(mo.size) + '.' +
-          (bestMv ? ' Better was to ' + C.moveAction(bestMv, true) + '.' : '');
+        sub.textContent = C.joinSentences([
+          mo.q.cls === 'blunder' ? T('Big mistake: that was {loss}.', { loss: C.lossLike(mo.size) }) : T('Mistake: that was {loss}.', { loss: C.lossLike(mo.size) }),
+          bestMv ? T('Better was to {move}.', { move: C.moveAction(bestMv, true) }) : ''
+        ]);
       } else {
         var reply = S.review.quality[mo.ply + 1];
-        sub.textContent = 'The bot slipped: its move was ' + C.lossLike(mo.size) + '.' +
-          (reply ? (reply.cls === 'best' || reply.cls === 'good' ? ' You made the most of it!' : ' Did you spot the chance?') : '');
+        sub.textContent = C.joinSentences([
+          T('The bot slipped: its move was {loss}.', { loss: C.lossLike(mo.size) }),
+          reply ? (reply.cls === 'best' || reply.cls === 'good' ? T('You made the most of it!') : T('Did you spot the chance?')) : ''
+        ]);
       }
       text.appendChild(title);
       text.appendChild(sub);
@@ -2461,16 +2496,16 @@
       show.type = 'button';
       show.className = 'btn btn-ghost';
       show.dataset.show = String(mo.mine ? mo.ply - 1 : mo.ply);
-      show.textContent = 'Show';
-      show.setAttribute('aria-label', 'Show the board at move ' + Math.ceil(mo.ply / 2));
+      show.textContent = T('Show');
+      show.setAttribute('aria-label', T('Show the board at move {n}', { n: Math.ceil(mo.ply / 2) }));
       actions.appendChild(show);
       if (mo.mine) {
         var retry = document.createElement('button');
         retry.type = 'button';
         retry.className = 'btn btn-ghost';
         retry.dataset.retry = String(mo.ply);
-        retry.textContent = 'Try again';
-        retry.setAttribute('aria-label', 'Play from just before this mistake');
+        retry.textContent = T('Try again');
+        retry.setAttribute('aria-label', T('Play from just before this mistake'));
         actions.appendChild(retry);
       }
       li.appendChild(mark);
@@ -2492,7 +2527,7 @@
     ply = Math.max(0, Math.min(hist.length, ply));
     var g = gameAtPly(ply);
     if (ChessAPI.isGameOver(g)) return;
-    if (S.phase !== 'over' && hist.length && !window.confirm('Start a new game from this position? Your current game will end.')) return;
+    if (S.phase !== 'over' && hist.length && !window.confirm(T('Start a new game from this position? Your current game will end.'))) return;
     var q = mistakePly ? S.review.quality[mistakePly] : null;
     var retry = mistakePly ? { move: hist[mistakePly - 1], drop: q ? q.drop : 0 } : null;
     newGame({ fen: g.fen(), color: S.playerColor, retry: retry });
@@ -2580,7 +2615,7 @@
       ctx.fillText('♞ Second Look', W / 2, 1022);
       ctx.fillStyle = '#9a9a9a';
       ctx.font = '700 26px "Atkinson Hyperlegible", system-ui, sans-serif';
-      ctx.fillText('Learn chess free at ' + location.host, W / 2, 1060);
+      ctx.fillText(T('Learn chess free at {site}', { site: location.host }), W / 2, 1060);
     }
 
     function toBlob() {
@@ -2628,11 +2663,11 @@
   function shareResult() {
     var o = S.lastOutcome;
     if (S.phase !== 'over' || !o) return;
-    var lvl = LEVELS[S.levelIndex].name;
+    var bot = botName(S.levelIndex);
     var moves = Math.ceil(S.game.history().length / 2);
-    var title = o.result === 'win' ? 'I beat the ' + lvl + ' bot!' : o.result === 'draw' ? 'A draw with the ' + lvl + ' bot' : 'I played the ' + lvl + ' bot';
-    var sub = o.summary + ' ' + moves + (moves === 1 ? ' move.' : ' moves.');
-    var text = title + ' Learn chess free on Second Look, with a coach that stops your blunders.';
+    var title = o.result === 'win' ? T('I beat {bot}!', { bot: bot }) : o.result === 'draw' ? T('A draw with {bot}', { bot: bot }) : T('I played {bot}', { bot: bot });
+    var sub = C.joinSentences([o.summary, moves === 1 ? T('1 move.') : T('{n} moves.', { n: moves })]);
+    var text = C.joinSentences([title, T('Learn chess free on Second Look, with a coach that stops your blunders.')]);
     var url = location.origin + '/';
     var hist = S.game.history({ verbose: true });
     var last = hist[hist.length - 1];
@@ -2651,7 +2686,7 @@
         if (navigator.share) return navigator.share({ title: 'Second Look', text: text, url: url });
         if (blob) downloadBlob(blob, 'second-look-result.png');
         return copyText(text + ' ' + url).then(function () {
-          toast('♞', blob ? 'Picture saved' : 'Link copied', blob ? 'The link is copied too, so you can paste it to a friend.' : 'Paste it to a friend.');
+          toast('♞', blob ? T('Picture saved') : T('Link copied'), blob ? T('The link is copied too, so you can paste it to a friend.') : T('Paste it to a friend.'));
         });
       })
       .catch(function () { /* sharing cancelled */ })
@@ -2675,7 +2710,7 @@
       '<clipPath id="egBottom"><rect x="0" y="' + mid + '" width="' + W + '" height="' + mid + '"/></clipPath></defs>' +
       '<line class="eg-mid" x1="0" y1="' + mid + '" x2="' + W + '" y2="' + mid + '"/>';
     if (pts.length < 2) {
-      svg += '<text class="eg-empty" x="' + (W / 2) + '" y="' + (mid - 8) + '" text-anchor="middle">Not enough moves for a graph yet</text>';
+      svg += '<text class="eg-empty" x="' + (W / 2) + '" y="' + (mid - 8) + '" text-anchor="middle">' + T('Not enough moves for a graph yet') + '</text>';
       ui.evalGraph.innerHTML = svg;
       return;
     }
@@ -2714,7 +2749,7 @@
     if (!ui.btnAutoplay) return;
     ui.btnAutoplay.classList.remove('is-playing');
     ui.btnAutoplay.setAttribute('aria-pressed', 'false');
-    ui.btnAutoplay.setAttribute('aria-label', 'Play through the moves');
+    ui.btnAutoplay.setAttribute('aria-label', T('Play through the moves'));
   }
 
   function toggleAutoplay() {
@@ -2739,7 +2774,7 @@
     }, AUTOPLAY_MS);
     ui.btnAutoplay.classList.add('is-playing');
     ui.btnAutoplay.setAttribute('aria-pressed', 'true');
-    ui.btnAutoplay.setAttribute('aria-label', 'Pause');
+    ui.btnAutoplay.setAttribute('aria-label', T('Pause'));
     renderNav();
   }
 
@@ -2777,7 +2812,7 @@
     renderMoveList();
     renderStrips();
     renderReviewBar();
-    setStatus('Choose a bot to start.', 'you', 'Pick a level under New game. Coach Guard watches every move you make.');
+    setStatus(T('Choose a bot to start.'), 'you', T('Pick a level under New game. Coach Guard watches every move you make.'));
     refreshControls();
     showPane('new');
   }
@@ -2800,7 +2835,7 @@
       card.type = 'button';
       card.className = 'menu-card';
       card.dataset.level = String(i);
-      card.setAttribute('aria-label', 'Play the ' + lvl.name + ' bot. ' + lvl.blurb);
+      card.setAttribute('aria-label', C.joinSentences([T('Play {bot}.', { bot: botName(i) }), levelBlurb(i)]));
       var icon = document.createElement('span');
       icon.className = 'menu-icon';
       icon.setAttribute('aria-hidden', 'true');
@@ -2809,16 +2844,16 @@
       text.className = 'menu-text';
       var title = document.createElement('span');
       title.className = 'menu-title';
-      title.textContent = lvl.name;
+      title.textContent = levelName(i);
       if (i === S.levelIndex) {
         var tag = document.createElement('span');
         tag.className = 'menu-tag';
-        tag.textContent = 'Last used';
+        tag.textContent = T('Last used');
         title.appendChild(tag);
       }
       var sub = document.createElement('span');
       sub.className = 'menu-sub';
-      sub.textContent = lvl.blurb;
+      sub.textContent = levelBlurb(i);
       text.appendChild(title);
       text.appendChild(sub);
       card.appendChild(icon);
@@ -2872,7 +2907,7 @@
       });
       $('btnClearBank').addEventListener('click', function () {
         if (!C.BlunderBank.count()) return;
-        if (window.confirm('Remove every saved blunder? This cannot be undone.')) {
+        if (window.confirm(T('Remove every saved blunder? This cannot be undone.'))) {
           C.BlunderBank.clear();
           self.entry = null;
           self.showIntro();
@@ -2909,8 +2944,10 @@
       $('bankEmpty').hidden = list.length > 0;
       $('btnClearBank').hidden = list.length === 0;
       $('bankStats').textContent = list.length
-        ? list.length + (list.length === 1 ? ' puzzle waiting' : ' puzzles waiting') + (stats.cleared ? ', ' + stats.cleared + ' cleared so far.' : '.')
-        : (stats.cleared ? 'All clear. You have solved ' + stats.cleared + (stats.cleared === 1 ? ' puzzle' : ' puzzles') + '.' : '');
+        ? (stats.cleared
+          ? plural(list.length, '{n} puzzle waiting, {cleared} cleared so far.', '{n} puzzles waiting, {cleared} cleared so far.', { cleared: stats.cleared })
+          : plural(list.length, '{n} puzzle waiting.', '{n} puzzles waiting.'))
+        : (stats.cleared ? plural(stats.cleared, 'All clear. You have solved {n} puzzle.', 'All clear. You have solved {n} puzzles.') : '');
       var self = this;
       list.forEach(function (e) {
         var li = document.createElement('li');
@@ -2927,7 +2964,7 @@
         var san = document.createElement('span');
         san.className = 'bank-item-san';
         var played = describeUci(e.fen, e.playedMove);
-        san.textContent = played ? C.moveTitle(played, true) : 'You played ' + e.playedSan;
+        san.textContent = played ? C.moveTitle(played, true) : T('You played {san}', { san: e.playedSan });
         var drop = document.createElement('span');
         drop.className = 'drop-pill';
         drop.textContent = C.lossGlyphs(e.drop);
@@ -2937,7 +2974,7 @@
         top.appendChild(drop);
         var sub = document.createElement('span');
         sub.className = 'bank-item-sub';
-        sub.textContent = 'Move ' + e.moveNumber + ' as ' + C.COLOR_NAMES[e.color] + ', ' + relativeDay(e.createdAt);
+        sub.textContent = T('Move {n} as {color}, {when}', { n: e.moveNumber, color: C.colorName(e.color), when: relativeDay(e.createdAt) });
         btn.appendChild(top);
         btn.appendChild(sub);
         var tags = document.createElement('span');
@@ -2945,19 +2982,19 @@
         if (e.caught) {
           var t1 = document.createElement('span');
           t1.className = 'bank-tag tag-caught';
-          t1.textContent = 'Caught by Coach Guard';
+          t1.textContent = T('Caught by Coach Guard');
           tags.appendChild(t1);
         }
         if (e.timesBlundered > 1) {
           var t2 = document.createElement('span');
           t2.className = 'bank-tag tag-repeat';
-          t2.textContent = 'Made this mistake ' + e.timesBlundered + ' times';
+          t2.textContent = T('Made this mistake {n} times', { n: e.timesBlundered });
           tags.appendChild(t2);
         }
         if (e.attempts > 0) {
           var t3 = document.createElement('span');
           t3.className = 'bank-tag';
-          t3.textContent = e.attempts + (e.attempts === 1 ? ' attempt' : ' attempts');
+          t3.textContent = plural(e.attempts, '{n} attempt', '{n} attempts');
           tags.appendChild(t3);
         }
         if (tags.children.length) btn.appendChild(tags);
@@ -2977,9 +3014,9 @@
       $('puzzleIntro').hidden = false;
       var n = C.BlunderBank.count();
       $('puzzleIntroText').textContent = n
-        ? "Pick a mistake from the list. You'll see the board just before it happened, so you can look for a better move."
-        : 'Nothing here yet. When you make a big mistake in a game, it shows up here as a puzzle.';
-      $('btnStartBank').textContent = n ? 'Start with the newest' : 'Play a game';
+        ? T("Pick a mistake from the list. You'll see the board just before it happened, so you can look for a better move.")
+        : T('Nothing here yet. When you make a big mistake in a game, it shows up here as a puzzle.');
+      $('btnStartBank').textContent = n ? T('Start with the newest') : T('Play a game');
       this.renderList();
     },
 
@@ -3010,7 +3047,7 @@
       this.board.setArrows([]);
       $('puzzleIntro').hidden = true;
       $('puzzleArea').hidden = false;
-      $('puzzleTitle').textContent = 'Find a better move (you are ' + C.COLOR_NAMES[e.color] + ')';
+      $('puzzleTitle').textContent = T('Find a better move (you are {color})', { color: C.colorName(e.color) });
       var playedMv = describeUci(e.fen, e.playedMove);
       var replyMv = null;
       if (playedMv && e.refutationSan) {
@@ -3019,10 +3056,13 @@
         replyMv = safeMove(afterGame, e.refutationSan);
       }
       $('puzzleText').textContent = playedMv
-        ? 'In your game you chose to ' + C.moveAction(playedMv, true) + '.' +
-          (replyMv ? ' Then the bot could ' + C.moveAction(replyMv, false) + '.' : '') + ' What should you play instead?'
-        : 'In your game you played ' + e.playedSan + '. What should you play instead?';
-      this.feedback('Your turn. Before you move, ask yourself: what can the bot do after this?', 'neutral');
+        ? C.joinSentences([
+          T('In your game you chose to {move}.', { move: C.moveAction(playedMv, true) }),
+          replyMv ? T('Then the bot could {move}.', { move: C.moveAction(replyMv, false) }) : '',
+          T('What should you play instead?')
+        ])
+        : C.joinSentences([T('In your game you played {san}.', { san: e.playedSan }), T('What should you play instead?')]);
+      this.feedback(T('Your turn. Before you move, ask yourself: what can the bot do after this?'), 'neutral');
       this.setButtons();
       this.renderList();
     },
@@ -3035,7 +3075,7 @@
       $('btnPuzzleRemove').disabled = !this.entry || this.phase === 'solved';
       var hasNext = C.BlunderBank.count() > (this.phase === 'solved' ? 0 : 1);
       $('btnPuzzleNext').disabled = !hasNext;
-      $('btnPuzzleNext').textContent = this.phase === 'solved' && !hasNext ? 'All clear' : 'Next puzzle';
+      $('btnPuzzleNext').textContent = this.phase === 'solved' && !hasNext ? T('All clear') : T('Next puzzle');
       this.board.refresh();
     },
 
@@ -3074,7 +3114,7 @@
       }
       this.phase = 'checking';
       this.setButtons();
-      this.feedback('Checking your move…', 'busy');
+      this.feedback(T('Checking your move…'), 'busy');
       var a = await analyze(this.game.fen(), PUZZLE_ANALYSIS);
       if (epoch !== this.epoch) return;
       var before = C.clampCp(e.evalBefore);
@@ -3086,10 +3126,10 @@
         }
         var lost = before - p;
         this.feedback(lost >= 50
-          ? 'Not quite. Compared with the best move, that is ' + C.lossLike(lost) + '. Try again.'
-          : "That's about as good as the move you played in the game. Look for something stronger.", 'bad');
+          ? T('Not quite. Compared with the best move, that is {loss}. Try again.', { loss: C.lossLike(lost) })
+          : T("That's about as good as the move you played in the game. Look for something stronger."), 'bad');
       } else {
-        this.feedback("That's not the move we're looking for. Try again.", 'bad');
+        this.feedback(T("That's not the move we're looking for. Try again."), 'bad');
       }
       Sound.play('wrong');
       C.BlunderBank.recordAttempt(e.id, false);
@@ -3115,8 +3155,8 @@
       C.BlunderBank.recordAttempt(e.id, true);
       onProgress('bank');
       this.feedback(alternative
-        ? 'That works too! The computer liked one other move even more: to ' + bestWords(e) + '. This puzzle is cleared from your bank.'
-        : "Solved! That's the move. This puzzle is cleared from your bank.", 'good');
+        ? T('That works too! The computer liked one other move even more: to {move}. This puzzle is cleared from your bank.', { move: bestWords(e) })
+        : T("Solved! That's the move. This puzzle is cleared from your bank."), 'good');
       this.setButtons();
       this.renderList();
     },
@@ -3128,7 +3168,7 @@
       this.hintShown = true;
       Sound.play('hint');
       this.board.setMarks({ hint: [best.from] });
-      this.feedback('Hint: move your ' + (p ? C.NAMES[p.type] : 'piece') + ' on ' + best.from + ' (the highlighted square).', 'neutral');
+      this.feedback(T('Hint: move your {piece} on {sq} (the highlighted square).', { piece: p ? C.pieceName(p.type) : T('piece'), sq: best.from }), 'neutral');
       this.setButtons();
     },
 
@@ -3146,7 +3186,7 @@
       this.phase = 'revealed';
       C.BlunderBank.recordAttempt(e.id, false);
       this.entry = C.BlunderBank.get(e.id) || e;
-      this.feedback('The best move was to ' + bestWords(e) + '. Follow the green arrow. This puzzle stays in your bank so you can try it again later.', 'neutral');
+      this.feedback(T('The best move was to {move}. Follow the green arrow. This puzzle stays in your bank so you can try it again later.', { move: bestWords(e) }), 'neutral');
       this.setButtons();
     },
 
@@ -3190,7 +3230,7 @@
   }
 
   function levelTitle(n) {
-    return LEVEL_TITLES[Math.min(n, LEVEL_TITLES.length) - 1];
+    return T(LEVEL_TITLES[Math.min(n, LEVEL_TITLES.length) - 1]);
   }
 
   var GOALS = [
@@ -3287,7 +3327,7 @@
       var after = levelFor(this.data.xp);
       if (after > before) {
         Sound.play('win');
-        toast(LEVEL_GLYPHS[Math.min(after, LEVEL_GLYPHS.length) - 1], 'Level ' + after + '!', "You're now a " + levelTitle(after) + '. Keep going!');
+        toast(LEVEL_GLYPHS[Math.min(after, LEVEL_GLYPHS.length) - 1], T('Level {n}!', { n: after }), T("You're now a {title}. Keep going!", { title: levelTitle(after) }));
       }
     },
 
@@ -3297,7 +3337,7 @@
       if (!b) return;
       this.data.badges[id] = Date.now();
       Sound.play('notify');
-      toast(b.icon, 'Badge earned: ' + b.name, b.desc);
+      toast(b.icon, T('Badge earned: {name}', { name: T(b.name) }), T(b.desc));
     },
 
     checkGoal: function () {
@@ -3309,7 +3349,7 @@
       this.addXp(50);
       this.award('goal');
       Sound.play('correct');
-      toast('◎', "Today's goal complete!", '+50 XP. Come back tomorrow to keep your streak going.');
+      toast('◎', T("Today's goal complete!"), T('+50 XP. Come back tomorrow to keep your streak going.'));
     },
 
     event: function (type, info) {
@@ -3413,19 +3453,21 @@
     var from = xpForLevel(lvl);
     var to = xpForLevel(lvl + 1);
     var pct = Math.round(((d.xp - from) / (to - from)) * 100);
-    ui.levelName.textContent = 'Level ' + lvl + ': ' + levelTitle(lvl);
+    ui.levelName.textContent = T('Level {n}: {title}', { n: lvl, title: levelTitle(lvl) });
     ui.levelGlyph.textContent = LEVEL_GLYPHS[Math.min(lvl, LEVEL_GLYPHS.length) - 1];
     ui.xpFill.style.width = pct + '%';
     ui.xpBar.setAttribute('aria-valuenow', String(pct));
-    ui.homeSub.textContent = (d.xp - from) + ' of ' + (to - from) + ' XP to level ' + (lvl + 1);
+    ui.homeSub.textContent = T('{have} of {need} XP to level {n}', { have: d.xp - from, need: to - from, n: lvl + 1 });
 
     var streak = Progress.streakNow();
     ui.streakNum.textContent = String(streak);
     ui.dayStreak.classList.toggle('is-alive', streak > 0);
     ui.dayStreak.classList.toggle('is-today', d.streak.last === todayKey());
     ui.dayStreak.title = streak
-      ? streak + (streak === 1 ? ' day' : ' days') + ' in a row' + (d.streak.last === todayKey() ? '. You practised today.' : '. Practise today to keep it going!')
-      : 'Practise today to start a streak';
+      ? (d.streak.last === todayKey()
+        ? plural(streak, '{n} day in a row. You practised today.', '{n} days in a row. You practised today.')
+        : plural(streak, '{n} day in a row. Practise today to keep it going!', '{n} days in a row. Practise today to keep it going!'))
+      : T('Practise today to start a streak');
 
     var today = d.days[todayKey()] || { games: 0, puzzles: 0, lessons: 0, goal: false };
     ui.goalList.innerHTML = '';
@@ -3441,10 +3483,10 @@
       text.className = 'goal-text';
       var label = document.createElement('span');
       label.className = 'goal-label';
-      label.textContent = g.label;
+      label.textContent = T(g.label);
       var count = document.createElement('span');
       count.className = 'goal-count';
-      count.textContent = have >= g.need ? 'Done' : have + ' of ' + g.need;
+      count.textContent = have >= g.need ? T('Done') : T('{have} of {need}', { have: have, need: g.need });
       text.appendChild(label);
       text.appendChild(count);
       li.appendChild(check);
@@ -3454,25 +3496,25 @@
         btn.type = 'button';
         btn.className = 'btn btn-ghost';
         btn.dataset.goal = g.go;
-        btn.textContent = g.button;
+        btn.textContent = T(g.button);
         li.appendChild(btn);
       }
       ui.goalList.appendChild(li);
     });
     ui.todayCard.classList.toggle('is-complete', !!today.goal);
-    ui.todayReward.textContent = today.goal ? 'Done! +50 XP' : '+50 XP';
+    ui.todayReward.textContent = today.goal ? T('Done! +50 XP') : '+50 XP';
 
     var next = Learn.nextLesson();
     if (next) {
       ui.nextLessonIcon.textContent = next.icon;
-      ui.nextLessonTitle.textContent = Learn.doneCount() ? 'Continue learning' : 'Learn chess from zero';
-      ui.nextLessonText.textContent = 'Next lesson: ' + next.title;
-      ui.btnNextLesson.textContent = Learn.progress.step[next.id] ? 'Continue' : 'Start';
+      ui.nextLessonTitle.textContent = Learn.doneCount() ? T('Continue learning') : T('Learn chess from zero');
+      ui.nextLessonText.textContent = T('Next lesson: {title}', { title: T(next.title) });
+      ui.btnNextLesson.textContent = Learn.progress.step[next.id] ? T('Continue') : T('Start');
     } else {
       ui.nextLessonIcon.textContent = '★';
-      ui.nextLessonTitle.textContent = 'All lessons done!';
-      ui.nextLessonText.textContent = 'Practise any lesson again, or play the bots.';
-      ui.btnNextLesson.textContent = 'Lessons';
+      ui.nextLessonTitle.textContent = T('All lessons done!');
+      ui.nextLessonText.textContent = T('Practise any lesson again, or play the bots.');
+      ui.btnNextLesson.textContent = T('Lessons');
     }
 
     ui.badgeGrid.innerHTML = '';
@@ -3482,24 +3524,26 @@
       if (has) earned++;
       var li = document.createElement('li');
       li.className = 'badge' + (has ? ' is-earned' : '');
-      li.title = b.name + ': ' + b.desc + (has ? ' (earned ' + relativeDay(d.badges[b.id]) + ')' : '');
-      li.setAttribute('aria-label', b.name + '. ' + b.desc + (has ? ' Earned.' : ' Not earned yet.'));
+      var bName = T(b.name);
+      var bDesc = T(b.desc);
+      li.title = has ? T('{name}: {desc} (earned {when})', { name: bName, desc: bDesc, when: relativeDay(d.badges[b.id]) }) : T('{name}: {desc}', { name: bName, desc: bDesc });
+      li.setAttribute('aria-label', C.joinSentences([T('{name}.', { name: bName }), bDesc, has ? T('Earned.') : T('Not earned yet.')]));
       var icon = document.createElement('span');
       icon.className = 'badge-icon';
       icon.setAttribute('aria-hidden', 'true');
       icon.textContent = b.icon;
       var name = document.createElement('span');
       name.className = 'badge-name';
-      name.textContent = b.name;
+      name.textContent = bName;
       li.appendChild(icon);
       li.appendChild(name);
       ui.badgeGrid.appendChild(li);
     });
-    ui.badgeCount.textContent = earned + ' of ' + BADGES.length;
+    ui.badgeCount.textContent = T('{have} of {need}', { have: earned, need: BADGES.length });
 
     Puzzles.load().then(function (data) {
       if (!data) {
-        ui.dailyText.textContent = 'Connect to the internet to load puzzles.';
+        ui.dailyText.textContent = T('Connect to the internet to load puzzles.');
         return;
       }
       var p = dailyPuzzle(data);
@@ -3511,9 +3555,12 @@
       var solved = Progress.data.daily.solved === todayKey();
       ui.dailyCard.classList.toggle('is-solved', solved);
       ui.dailyText.textContent = solved
-        ? 'Solved! A new puzzle arrives tomorrow.'
-        : 'You play ' + C.COLOR_NAMES[g.turn()] + '. ' + (p.tags.indexOf('mate1') !== -1 ? 'Find checkmate in 1.' : p.tags.indexOf('mate2') !== -1 ? 'Find checkmate in 2.' : 'Find the best move.') + ' +25 XP';
-      ui.btnDaily.textContent = solved ? 'Solve again' : 'Solve it';
+        ? T('Solved! A new puzzle arrives tomorrow.')
+        : C.joinSentences([
+          T('You play {color}.', { color: C.colorName(g.turn()) }),
+          p.tags.indexOf('mate1') !== -1 ? T('Find checkmate in 1.') : p.tags.indexOf('mate2') !== -1 ? T('Find checkmate in 2.') : T('Find the best move.')
+        ]) + ' +25 XP';
+      ui.btnDaily.textContent = solved ? T('Solve again') : T('Solve it');
     });
   }
 
@@ -3699,11 +3746,11 @@
         var h = document.createElement('h2');
         h.className = 'ln-unit-title';
         var title = document.createElement('span');
-        title.textContent = unit.title;
+        title.textContent = T(unit.title);
         var count = document.createElement('span');
         count.className = 'ln-unit-count';
         var doneHere = unit.lessons.filter(function (l) { return self.progress.done[l.id]; }).length;
-        count.textContent = doneHere + ' of ' + unit.lessons.length;
+        count.textContent = T('{have} of {need}', { have: doneHere, need: unit.lessons.length });
         h.appendChild(title);
         h.appendChild(count);
         sec.appendChild(h);
@@ -3726,17 +3773,20 @@
           text.className = 'ln-card-text';
           var t = document.createElement('span');
           t.className = 'ln-card-title';
-          t.textContent = l.title;
+          t.textContent = T(l.title);
           var sub = document.createElement('span');
           sub.className = 'ln-card-sub';
-          sub.textContent = l.steps.length + (l.steps.length === 1 ? ' step' : ' steps');
+          sub.textContent = plural(l.steps.length, '{n} step', '{n} steps');
           text.appendChild(t);
           text.appendChild(sub);
           var state = document.createElement('span');
           state.className = 'ln-card-state';
           var partial = self.progress.step[l.id] || 0;
-          state.textContent = done ? 'Done ✓' : next && next.id === l.id ? (partial ? 'Continue' : 'Start') : partial ? partial + '/' + l.steps.length : '';
-          btn.setAttribute('aria-label', l.title + '. ' + (done ? 'Done.' : partial ? partial + ' of ' + l.steps.length + ' steps done.' : 'Not started.'));
+          state.textContent = done ? T('Done') + ' ✓' : next && next.id === l.id ? (partial ? T('Continue') : T('Start')) : partial ? partial + '/' + l.steps.length : '';
+          btn.setAttribute('aria-label', C.joinSentences([
+            T('{name}.', { name: T(l.title) }),
+            done ? T('Done.') : partial ? T('{have} of {need} steps done.', { have: partial, need: l.steps.length }) : T('Not started.')
+          ]));
           btn.appendChild(icon);
           btn.appendChild(text);
           btn.appendChild(state);
@@ -3758,8 +3808,8 @@
       this.game = null;
       $('lnLesson').hidden = true;
       $('lnList').hidden = false;
-      $('lnTitle').textContent = 'Learn chess';
-      $('lnStepLabel').textContent = 'Pick a lesson to start';
+      $('lnTitle').textContent = T('Learn chess');
+      $('lnStepLabel').textContent = T('Pick a lesson to start');
       $('lnIcon').textContent = '♞';
       this.renderList();
       this.idleBoard();
@@ -3772,9 +3822,9 @@
       this.lesson = lesson;
       $('lnList').hidden = true;
       $('lnLesson').hidden = false;
-      $('lnLessonTitle').textContent = lesson.title;
-      $('lnIntro').textContent = lesson.intro;
-      $('lnTitle').textContent = lesson.title;
+      $('lnLessonTitle').textContent = T(lesson.title);
+      $('lnIntro').textContent = T(lesson.intro);
+      $('lnTitle').textContent = T(lesson.title);
       $('lnIcon').textContent = lesson.icon;
       var resume = this.progress.done[id] ? 0 : Math.min(this.progress.step[id] || 0, lesson.steps.length - 1);
       this.startStep(resume);
@@ -3782,7 +3832,8 @@
     },
 
     status: function (task, feedback, tone, kind) {
-      $('lnTask').textContent = task;
+      // Lesson texts are written in English in lessons.js; translate them here.
+      $('lnTask').textContent = T(task);
       $('lnFeedback').textContent = feedback || '';
       $('lnDot').dataset.kind = kind || 'you';
       $('lnTask').closest('.status-card').dataset.tone = tone || '';
@@ -3797,14 +3848,14 @@
         else if (i === this.stepIndex) li.className = 'is-current';
         ol.appendChild(li);
       }
-      $('lnStepLabel').textContent = 'Step ' + (this.stepIndex + 1) + ' of ' + this.lesson.steps.length;
+      $('lnStepLabel').textContent = T('Step {n} of {total}', { n: this.stepIndex + 1, total: this.lesson.steps.length });
     },
 
     setButtons: function () {
       var done = this.phase === 'step-done' || this.phase === 'lesson-done';
       var lastStep = this.stepIndex >= this.lesson.steps.length - 1;
       $('btnLnNext').disabled = !done;
-      $('btnLnNext').textContent = this.phase === 'lesson-done' ? (this.nextLesson() ? 'Next lesson' : 'All lessons') : lastStep ? 'Finish' : 'Next';
+      $('btnLnNext').textContent = this.phase === 'lesson-done' ? (this.nextLesson() ? T('Next lesson') : T('All lessons')) : lastStep ? T('Finish') : T('Next');
       $('btnLnHint').disabled = this.phase !== 'doing';
       this.board.refresh();
     },
@@ -3837,7 +3888,7 @@
         this.board.setMarks({ lastMove: null, check: checkSquare(this.game), danger: [], hint: [], stars: [] });
       }
       this.phase = 'doing';
-      this.status(st.text, st.type === 'play' && st.tip ? 'Tip: ' + st.tip : '', '', 'you');
+      this.status(st.text, st.type === 'play' && st.tip ? T('Tip: {tip}', { tip: T(st.tip) }) : '', '', 'you');
       this.renderDots();
       this.setButtons();
     },
@@ -3870,13 +3921,17 @@
         ? this.stars.length
         : Object.keys(this.map).filter(function (k) { return this.map[k] === this.map[k].toLowerCase(); }, this).length;
       if (left === 0) {
-        var best = st.par ? (this.moves <= st.par ? ' That is the fewest moves possible!' : ' It can be done in ' + st.par + (st.par === 1 ? ' move.' : ' moves.')) : '';
-        this.stepDone((st.type === 'stars' ? 'All stars collected' : 'All pieces taken') + ' in ' + this.moves + (this.moves === 1 ? ' move.' : ' moves.') + best +
-          (promoted ? ' Your pawn became a queen on the last row.' : ''));
+        this.stepDone(C.joinSentences([
+          st.type === 'stars'
+            ? plural(this.moves, 'All stars collected in {n} move.', 'All stars collected in {n} moves.')
+            : plural(this.moves, 'All pieces taken in {n} move.', 'All pieces taken in {n} moves.'),
+          st.par ? (this.moves <= st.par ? T('That is the fewest moves possible!') : plural(st.par, 'It can be done in {n} move.', 'It can be done in {n} moves.')) : '',
+          promoted ? T('Your pawn became a queen on the last row.') : ''
+        ]));
         return;
       }
-      if (promoted) this.status(st.text, 'Your pawn reached the last row and became a queen!', '', 'you');
-      else if (hadStar || took) this.status(st.text, left + (st.type === 'stars' ? (left === 1 ? ' star' : ' stars') : (left === 1 ? ' piece' : ' pieces')) + ' to go.', '', 'you');
+      if (promoted) this.status(st.text, T('Your pawn reached the last row and became a queen!'), '', 'you');
+      else if (hadStar || took) this.status(st.text, st.type === 'stars' ? plural(left, '{n} star to go.', '{n} stars to go.') : plural(left, '{n} piece to go.', '{n} pieces to go.'), '', 'you');
     },
 
     goalMet: function (mv) {
@@ -3926,16 +3981,16 @@
         return;
       }
       if (this.goalMet(mv)) {
-        this.stepDone(st.done || 'Well done!');
+        this.stepDone(T(st.done || 'Well done!'));
         return;
       }
       var msg;
       if (st.goal === 'mate' && ChessAPI.isStalemate(this.game)) {
-        msg = "Stalemate! The bot's king is not in check, but it has no legal move, so the game would be a draw. Try a different move.";
+        msg = T("Stalemate! The bot's king is not in check, but it has no legal move, so the game would be a draw. Try a different move.");
       } else if (st.goal === 'promote' && mv.promotion) {
-        msg = 'That works, but a queen is the strongest piece. Try again and choose the queen.';
+        msg = T('That works, but a queen is the strongest piece. Try again and choose the queen.');
       } else {
-        msg = st.wrong || GOAL_HELP[st.goal] || 'Not quite. Try again.';
+        msg = T(st.wrong || GOAL_HELP[st.goal] || 'Not quite. Try again.');
       }
       this.phase = 'wrong';
       Sound.play('wrong');
@@ -3958,13 +4013,13 @@
       var st = this.step;
       var g = this.game;
       if (ChessAPI.isCheckmate(g)) {
-        this.stepDone(st.done || 'Checkmate!');
+        this.stepDone(T(st.done || 'Checkmate!'));
         return;
       }
       if (this.playFailed()) return;
       this.phase = 'thinking';
       this.setButtons();
-      this.status(st.text, 'The bot is thinking…', '', 'bot');
+      this.status(st.text, T('The bot is thinking…'), '', 'bot');
       var fen = g.fen();
       var t0 = Date.now();
       var uci = null;
@@ -3994,20 +4049,20 @@
       playMoveSound(mv, g, true);
       if (this.playFailed()) return;
       this.phase = 'doing';
-      this.status(st.text, mv.captured ? 'The bot took your ' + C.pieceName(mv.captured) + '.' : (st.tip ? 'Tip: ' + st.tip : ''), '', 'you');
+      this.status(st.text, mv.captured ? T('The bot took your {piece}.', { piece: C.pieceName(mv.captured) }) : (st.tip ? T('Tip: {tip}', { tip: T(st.tip) }) : ''), '', 'you');
       this.setButtons();
     },
 
     playFailed: function () {
       var g = this.game;
       var reason = null;
-      if (ChessAPI.isStalemate(g)) reason = "Stalemate! The bot's king had no legal move but was not in check, so it's a draw. Keep your queen or rook a little further away and try again.";
-      else if (ChessAPI.isInsufficient && ChessAPI.isInsufficient(g)) reason = 'The bot took your piece, so nobody can checkmate any more. Try again, and keep your piece away from the king.';
-      else if (this.moves >= 50) reason = 'That took 50 moves, so the game would be a draw. Try again: shrink the box faster.';
+      if (ChessAPI.isStalemate(g)) reason = T("Stalemate! The bot's king had no legal move but was not in check, so it's a draw. Keep your queen or rook a little further away and try again.");
+      else if (ChessAPI.isInsufficient && ChessAPI.isInsufficient(g)) reason = T('The bot took your piece, so nobody can checkmate any more. Try again, and keep your piece away from the king.');
+      else if (this.moves >= 50) reason = T('That took 50 moves, so the game would be a draw. Try again: shrink the box faster.');
       if (!reason) return false;
       this.phase = 'wrong';
       Sound.play('wrong');
-      this.status(this.step.text, reason + ' Press Start over.', 'bad', 'warn');
+      this.status(this.step.text, C.joinSentences([reason, T('Press Start over.')]), 'bad', 'warn');
       this.setButtons();
       return true;
     },
@@ -4021,11 +4076,11 @@
         var first = !this.progress.done[id];
         this.progress.done[id] = Date.now();
         this.saveProgress();
-        this.status('Lesson complete!', text, 'good', 'over');
+        this.status(T('Lesson complete!'), text, 'good', 'over');
         onProgress('lesson', { id: id, first: first });
       } else {
         this.saveProgress();
-        this.status('Well done!', text, 'good', 'over');
+        this.status(T('Well done!'), text, 'good', 'over');
         onProgress('lesson-step', { id: id });
       }
       this.renderDots();
@@ -4056,10 +4111,10 @@
         var direct = reach.filter(function (sq) { return goals.indexOf(sq) !== -1; })[0];
         if (direct) {
           this.board.setArrows([{ from: this.hero, to: direct, color: 'green' }]);
-          this.status(st.text, 'Follow the green arrow.', '', 'you');
+          this.status(st.text, T('Follow the green arrow.'), '', 'you');
         } else {
           this.board.setMarks({ hint: [this.hero] });
-          this.status(st.text, 'No target can be reached in one move from here. Move somewhere that lines up with one first.', '', 'you');
+          this.status(st.text, T('No target can be reached in one move from here. Move somewhere that lines up with one first.'), '', 'you');
         }
         return;
       }
@@ -4068,7 +4123,7 @@
           if (!a || !a.bestMove || self.phase !== 'doing') return;
           var m = uciToMove(a.bestMove);
           self.board.setArrows([{ from: m.from, to: m.to, color: 'green' }]);
-          self.status(st.text, 'A good move: follow the green arrow.', '', 'you');
+          self.status(st.text, T('A good move: follow the green arrow.'), '', 'you');
         });
         return;
       }
@@ -4090,7 +4145,7 @@
       }
       if (sol) {
         this.board.setArrows([{ from: sol.from, to: sol.to, color: 'green' }]);
-        this.status(st.text, 'Follow the green arrow.', '', 'you');
+        this.status(st.text, T('Follow the green arrow.'), '', 'you');
       }
     }
   };
@@ -4181,7 +4236,7 @@
         chip.className = 'chip';
         chip.setAttribute('role', 'radio');
         chip.dataset.theme = t.id;
-        chip.textContent = t.name;
+        chip.textContent = T(t.name);
         chips.appendChild(chip);
       });
       chips.addEventListener('click', function (e) {
@@ -4205,7 +4260,7 @@
       Array.prototype.forEach.call($('pzThemes').querySelectorAll('[data-theme]'), function (chip) {
         chip.setAttribute('aria-checked', String(chip.dataset.theme === theme));
       });
-      $('pzThemeHelp').textContent = puzzleTheme(theme).help;
+      $('pzThemeHelp').textContent = T(puzzleTheme(theme).help);
     },
 
     renderStats: function () {
@@ -4240,7 +4295,7 @@
       if (this.data) return Promise.resolve(this.data);
       if (this.loading) return this.loading;
       this.phase = 'loading';
-      this.status('Loading puzzles…', 'busy');
+      this.status(T('Loading puzzles…'), 'busy');
       this.loading = fetch('./puzzles.json')
         .then(function (r) {
           if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -4257,7 +4312,7 @@
         .catch(function () {
           self.loading = null;
           self.phase = 'error';
-          self.status("Couldn't load the puzzles.", 'warn', 'Check your internet connection, then press Next puzzle to try again.');
+          self.status(T("Couldn't load the puzzles."), 'warn', T('Check your internet connection, then press Next puzzle to try again.'));
           self.setButtons();
           $('btnPzNext').disabled = false;
           return null;
@@ -4333,25 +4388,25 @@
       this.phase = 'intro';
       var mainTag = p.tags.indexOf('mate1') !== -1 ? 'mate1' : p.tags.indexOf('mate2') !== -1 ? 'mate2' : p.tags[0];
       var theme = this.stats.theme === 'mixed' ? puzzleTheme(mainTag) : puzzleTheme(this.stats.theme);
-      $('pzTitle').textContent = this.daily ? 'Puzzle of the day' : theme.title;
-      $('pzSide').textContent = '(you are ' + C.COLOR_NAMES[this.color] + ')';
-      $('pzTask').textContent = p.tags.indexOf('mate1') !== -1 ? 'Find checkmate in 1 move'
-        : p.tags.indexOf('mate2') !== -1 ? 'Find checkmate in 2 moves'
-        : 'Find the best move';
+      $('pzTitle').textContent = this.daily ? T('Puzzle of the day') : T(theme.title);
+      $('pzSide').textContent = T('(you are {color})', { color: C.colorName(this.color) });
+      $('pzTask').textContent = p.tags.indexOf('mate1') !== -1 ? T('Find checkmate in 1 move')
+        : p.tags.indexOf('mate2') !== -1 ? T('Find checkmate in 2 moves')
+        : T('Find the best move');
       $('pzRating').parentElement.classList.remove('is-up', 'is-down');
       this.board.clearSelection();
       this.board.setOrientation(this.color);
       this.board.setFen(p.fen);
       this.board.setMarks({ lastMove: null, check: checkSquare(this.game), danger: [], hint: [] });
       this.board.setArrows([]);
-      this.status("Watch the bot's move…", 'bot');
+      this.status(T("Watch the bot's move…"), 'bot');
       this.setButtons();
       this.timer = setTimeout(function () {
         if (epoch !== self.epoch) return;
         self.playAuto(p.moves[0]);
         self.idx = 1;
         self.phase = 'solving';
-        self.status('Your turn. ' + $('pzTask').textContent + '.', 'you', retry ? 'Try again from the start.' : '');
+        self.status(T('Your turn. {task}.', { task: $('pzTask').textContent }), 'you', retry ? T('Try again from the start.') : '');
         self.setButtons();
       }, 650);
     },
@@ -4403,13 +4458,13 @@
       }
       this.phase = 'intro';
       this.setButtons();
-      this.status('Good move! Keep going.', 'bot', 'Watch the bot answer…', 'good');
+      this.status(T('Good move! Keep going.'), 'bot', T('Watch the bot answer…'), 'good');
       this.timer = setTimeout(function () {
         if (epoch !== self.epoch) return;
         self.playAuto(self.cur.moves[self.idx + 1]);
         self.idx += 2;
         self.phase = 'solving';
-        self.status('Your turn again. Now finish it!', 'you', '', 'good');
+        self.status(T('Your turn again. Now finish it!'), 'you', '', 'good');
         self.setButtons();
       }, 550);
     },
@@ -4423,11 +4478,11 @@
       if (first) this.rate(0);
       var tag = this.cur.tags;
       var tipText = tag.indexOf('mate1') !== -1 || tag.indexOf('mate2') !== -1 || tag.indexOf('backrank') !== -1
-        ? "That doesn't trap the king. Which checks do you have?"
-        : tag.indexOf('fork') !== -1 ? 'Look for a move that attacks two of the bot\'s pieces at once.'
-        : tag.indexOf('free') !== -1 ? "Look for a bot piece that nothing protects."
-        : 'Look at every check, every capture and every attack.';
-      this.status('Not that one.', 'warn', tipText + ' Try again, or press Show solution.', 'bad');
+        ? T("That doesn't trap the king. Which checks do you have?")
+        : tag.indexOf('fork') !== -1 ? T("Look for a move that attacks two of the bot's pieces at once.")
+        : tag.indexOf('free') !== -1 ? T('Look for a bot piece that nothing protects.')
+        : T('Look at every check, every capture and every attack.');
+      this.status(T('Not that one.'), 'warn', C.joinSentences([tipText, T('Try again, or press Show solution.')]), 'bad');
       this.setButtons();
       this.timer = setTimeout(function () {
         if (epoch !== self.epoch) return;
@@ -4444,15 +4499,15 @@
 
     explain: function (mv) {
       var t = this.cur.tags;
-      if (ChessAPI.isCheckmate(this.game)) return "Checkmate! The bot's king is under attack and has no safe square.";
+      if (ChessAPI.isCheckmate(this.game)) return T("Checkmate! The bot's king is under attack and has no safe square.");
       if (t.indexOf('fork') !== -1) {
         var first = this.game.history({ verbose: true }).filter(function (m) { return m.color === mv.color; })[0] || mv;
-        return 'Your ' + C.pieceName(first.piece) + ' attacked two pieces at once, so the bot could not save both.';
+        return T('Your {piece} attacked two pieces at once, so the bot could not save both.', { piece: C.pieceName(first.piece) });
       }
-      if (t.indexOf('free') !== -1) return "That piece had no protection, so you won it for free.";
-      if (t.indexOf('pin') !== -1) return "The bot's pieces were lined up, so it could not save both.";
-      if (t.indexOf('promote') !== -1) return 'Your pawn made it to the last row and became a queen.';
-      return 'That was the best move.';
+      if (t.indexOf('free') !== -1) return T('That piece had no protection, so you won it for free.');
+      if (t.indexOf('pin') !== -1) return T("The bot's pieces were lined up, so it could not save both.");
+      if (t.indexOf('promote') !== -1) return T('Your pawn made it to the last row and became a queen.');
+      return T('That was the best move.');
     },
 
     solved: function (mv) {
@@ -4467,8 +4522,8 @@
         this.stats.best = Math.max(this.stats.best, this.stats.streak);
         this.saveStats();
       }
-      var change = delta > 0 ? ' Your rating went up by ' + delta + '.' : '';
-      this.status(this.failed ? 'Solved on another try.' : 'Solved!', 'over', this.explain(mv) + change, 'good');
+      var change = delta > 0 ? T('Your rating went up by {n}.', { n: delta }) : '';
+      this.status(this.failed ? T('Solved on another try.') : T('Solved!'), 'over', C.joinSentences([this.explain(mv), change]), 'good');
       this.setButtons();
       this.renderStats();
       onProgress('puzzle', { solved: !this.failed, hinted: this.hinted, daily: this.daily, total: this.stats.solved, rating: this.stats.rating });
@@ -4481,7 +4536,7 @@
       this.hinted = true;
       Sound.play('hint');
       this.board.setMarks({ hint: [u.slice(0, 2)] });
-      this.status('Hint', 'you', 'Move your ' + (p ? C.NAMES[p.type] : 'piece') + ' on ' + u.slice(0, 2) + ' (the highlighted square).');
+      this.status(T('Hint'), 'you', T('Move your {piece} on {sq} (the highlighted square).', { piece: p ? C.pieceName(p.type) : T('piece'), sq: u.slice(0, 2) }));
       this.setButtons();
     },
 
@@ -4499,12 +4554,12 @@
       var steps = this.cur.moves.slice();
       this.board.setFen(this.cur.fen);
       this.setButtons();
-      this.status('Here is the answer.', 'bot', '');
+      this.status(T('Here is the answer.'), 'bot', '');
       var i = 0;
       function step() {
         if (epoch !== self.epoch || i >= steps.length) {
           if (epoch === self.epoch) {
-            self.status('Here is the answer.', 'over', words.length ? 'You could ' + words.join(', then ') + '.' : '');
+            self.status(T('Here is the answer.'), 'over', words.length ? T('You could {moves}.', { moves: words.join(T(', then ')) }) : '');
             self.board.setArrows([]);
           }
           return;
@@ -4550,26 +4605,31 @@
   /** The best move of a saved puzzle, in words. */
   function bestWords(e) {
     var mv = describeUci(e.fen, e.bestMove);
-    return mv ? C.moveAction(mv, true) : 'play ' + e.bestSan;
+    return mv ? C.moveAction(mv, true) : T('play {san}', { san: e.bestSan });
+  }
+
+  /** The date locale for the chosen language (undefined = the browser's own). */
+  function uiLocale() {
+    return window.I18N && window.I18N.lang !== 'en' ? window.I18N.locale : undefined;
   }
 
   function relativeDay(ts) {
     var d = new Date(ts);
     var now = new Date();
     var startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    if (ts >= startOfToday) return 'today';
-    if (ts >= startOfToday - 86400000) return 'yesterday';
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    if (ts >= startOfToday) return T('today');
+    if (ts >= startOfToday - 86400000) return T('yesterday');
+    return d.toLocaleDateString(uiLocale(), { month: 'short', day: 'numeric' });
   }
 
   function updateBankBadge() {
     var n = C.BlunderBank.count();
     ui.bankBadge.textContent = String(n);
     ui.bankBadge.hidden = n === 0;
-    ui.bankBadge.setAttribute('aria-label', n + (n === 1 ? ' saved blunder' : ' saved blunders'));
+    ui.bankBadge.setAttribute('aria-label', plural(n, '{n} saved blunder', '{n} saved blunders'));
     ui.bankBadgeMobile.textContent = n > 99 ? '99+' : String(n);
     ui.bankBadgeMobile.hidden = n === 0;
-    ui.btnBankQuick.setAttribute('aria-label', 'My Blunder Bank, ' + n + (n === 1 ? ' puzzle waiting' : ' puzzles waiting'));
+    ui.btnBankQuick.setAttribute('aria-label', plural(n, 'My Blunder Bank, {n} puzzle waiting', 'My Blunder Bank, {n} puzzles waiting'));
     renderHome();
   }
 
@@ -4640,8 +4700,8 @@
       chip.setAttribute('role', 'radio');
       chip.setAttribute('aria-checked', String(i === S.homeLevel));
       chip.dataset.level = String(i);
-      chip.textContent = LEVELS[i].name;
-      chip.title = LEVELS[i].blurb;
+      chip.textContent = levelName(i);
+      chip.title = levelBlurb(i);
       ui.levelChips.appendChild(chip);
     }
   }
@@ -4659,9 +4719,12 @@
     renderProgressHome();
 
     renderLevelChips();
-    var colour = { w: 'White', b: 'Black', random: 'a random colour' }[S.colorChoice] || 'White';
-    var tcPhrase = (TIME_CONTROLS[S.timeChoice] || TIME_CONTROLS.none).phrase;
-    ui.homeNote.textContent = 'You play ' + colour + ' with ' + tcPhrase + '. Coach Guard is ' + (S.guardOn ? 'on' : 'off') + '.';
+    var colour = S.colorChoice === 'random' ? T('a random colour') : C.colorName(S.colorChoice === 'b' ? 'b' : 'w');
+    var tcPhrase = T((TIME_CONTROLS[S.timeChoice] || TIME_CONTROLS.none).phrase);
+    ui.homeNote.textContent = C.joinSentences([
+      T('You play {color} with {time}.', { color: colour, time: tcPhrase }),
+      S.guardOn ? T('Coach Guard is on.') : T('Coach Guard is off.')
+    ]);
     ui.btnHomeContinue.hidden = !(S.started && S.phase !== 'over' && S.game.history().length > 0);
 
     ui.homePuzzleCount.textContent = String(bank.length);
@@ -4669,16 +4732,16 @@
       homeBoard.setOrientation(bank[0].color);
       homeBoard.setFen(bank[0].fen);
       ui.homePuzzleText.textContent = bank.length === 1
-        ? 'Find the move you missed in one of your games.'
-        : 'Find the moves you missed. Newest first.';
-      ui.btnHomePuzzle.textContent = 'Solve puzzle';
+        ? T('Find the move you missed in one of your games.')
+        : T('Find the moves you missed. Newest first.');
+      ui.btnHomePuzzle.textContent = T('Solve puzzle');
     } else {
       homeBoard.setOrientation('w');
       homeBoard.setFen(START_FEN);
       ui.homePuzzleText.textContent = bankStats.cleared
-        ? 'All clear. Blunders from new games will show up here.'
-        : 'No puzzles yet. Blunders from your games become puzzles here.';
-      ui.btnHomePuzzle.textContent = 'Play a game';
+        ? T('All clear. Blunders from new games will show up here.')
+        : T('No puzzles yet. Blunders from your games become puzzles here.');
+      ui.btnHomePuzzle.textContent = T('Play a game');
     }
 
     ui.historyList.innerHTML = '';
@@ -4688,23 +4751,22 @@
       li.className = 'history-item';
       var badge = document.createElement('span');
       badge.className = 'result-badge result-' + g.result;
-      badge.textContent = g.result === 'win' ? 'W' : g.result === 'loss' ? 'L' : '½';
-      badge.setAttribute('aria-label', g.result === 'win' ? 'Win' : g.result === 'loss' ? 'Loss' : 'Draw');
+      badge.textContent = g.result === 'win' ? T('W') : g.result === 'loss' ? T('L') : '½';
+      badge.setAttribute('aria-label', g.result === 'win' ? T('Win') : g.result === 'loss' ? T('Loss') : T('Draw'));
       var text = document.createElement('span');
       text.className = 'history-text';
       var title = document.createElement('span');
       title.className = 'history-title';
-      var lvl = LEVELS[g.level] || LEVELS[2];
-      title.textContent = 'vs ' + lvl.name + ' bot';
+      title.textContent = T('vs {level} bot', { level: levelName(LEVELS[g.level] ? g.level : 2) });
       var sub = document.createElement('span');
       sub.className = 'history-sub';
-      var how = { checkmate: 'Checkmate', timeout: 'On time', stalemate: 'Stalemate', repetition: 'Repetition', insufficient: 'Not enough pieces', fifty: '50-move rule' }[g.how] || 'Finished';
-      sub.textContent = how + ', ' + g.moves + (g.moves === 1 ? ' move' : ' moves') + ' as ' + (g.color === 'b' ? 'Black' : 'White') + ', ' + relativeDay(g.at);
+      var how = T({ checkmate: 'Checkmate', timeout: 'On time', stalemate: 'Stalemate', repetition: 'Repetition', insufficient: 'Not enough pieces', fifty: '50-move rule' }[g.how] || 'Finished');
+      sub.textContent = plural(g.moves, '{how}, {n} move as {color}, {when}', '{how}, {n} moves as {color}, {when}', { how: how, color: C.colorName(g.color === 'b' ? 'b' : 'w'), when: relativeDay(g.at) });
       text.appendChild(title);
       text.appendChild(sub);
       var tag = document.createElement('span');
       tag.className = 'history-tag ' + (g.blunders ? 'has-blunders' : 'is-clean');
-      tag.textContent = g.blunders ? g.blunders + (g.blunders === 1 ? ' blunder' : ' blunders') : 'Clean';
+      tag.textContent = g.blunders ? plural(g.blunders, '{n} blunder', '{n} blunders') : T('Clean');
       li.appendChild(badge);
       li.appendChild(text);
       li.appendChild(tag);
@@ -4724,6 +4786,13 @@
 
   var BACKUP_PREFIX = 'chessTrainer.';
 
+  /** An error whose message is written for the player (already translated). */
+  function friendlyError(text) {
+    var e = new Error(T(text));
+    e.friendly = true;
+    return e;
+  }
+
   function collectBackup() {
     var data = {};
     try {
@@ -4739,18 +4808,18 @@
 
   function checkBackup(obj) {
     if (!obj || obj.app !== 'second-look' || !obj.data || typeof obj.data !== 'object') {
-      throw new Error("This isn't a Second Look backup.");
+      throw friendlyError("This isn't a Second Look backup.");
     }
     var keys = Object.keys(obj.data).filter(function (k) { return k.indexOf(BACKUP_PREFIX) === 0 && typeof obj.data[k] === 'string'; });
-    if (!keys.length) throw new Error('This backup is empty.');
+    if (!keys.length) throw friendlyError('This backup is empty.');
     return keys;
   }
 
   /** Replace this browser's progress with the backup, then reload. */
   function applyBackup(obj) {
     var keys = checkBackup(obj);
-    var when = typeof obj.exportedAt === 'number' ? new Date(obj.exportedAt).toLocaleString() : 'an earlier date';
-    if (!window.confirm('Replace the progress on this device with the backup from ' + when + '? Your current games, puzzles and badges here will be replaced.')) return false;
+    var when = typeof obj.exportedAt === 'number' ? new Date(obj.exportedAt).toLocaleString(uiLocale()) : T('an earlier date');
+    if (!window.confirm(T('Replace the progress on this device with the backup from {when}? Your current games, puzzles and badges here will be replaced.', { when: when }))) return false;
     try {
       var old = [];
       for (var i = 0; i < window.localStorage.length; i++) {
@@ -4760,10 +4829,10 @@
       old.forEach(function (key) { window.localStorage.removeItem(key); });
       keys.forEach(function (key) { window.localStorage.setItem(key, obj.data[key]); });
     } catch (e) {
-      throw new Error("This browser won't let the site save data. Check that private browsing is off.");
+      throw friendlyError("This browser won't let the site save data. Check that private browsing is off.");
     }
     S.restoring = true;
-    toast('✓', 'Progress loaded', 'Reloading…');
+    toast('✓', T('Progress loaded'), T('Reloading…'));
     setTimeout(function () { location.reload(); }, 700);
     return true;
   }
@@ -4803,19 +4872,19 @@
     try {
       bytes = base64ToBytes(body);
     } catch (e) {
-      return Promise.reject(new Error("That code isn't complete. Copy it again and paste the whole thing."));
+      return Promise.reject(friendlyError("That code isn't complete. Copy it again and paste the whole thing."));
     }
     var json;
     if (head === 'SL1:') {
-      if (typeof DecompressionStream !== 'function') return Promise.reject(new Error('This browser is too old to read the code. Use a backup file instead.'));
+      if (typeof DecompressionStream !== 'function') return Promise.reject(friendlyError('This browser is too old to read the code. Use a backup file instead.'));
       json = streamBytes(bytes, new DecompressionStream('gzip')).then(function (raw) { return new TextDecoder().decode(raw); });
     } else if (head === 'SL0:') {
       json = Promise.resolve(new TextDecoder().decode(bytes));
     } else {
-      return Promise.reject(new Error("That doesn't look like a transfer code. It should start with SL."));
+      return Promise.reject(friendlyError("That doesn't look like a transfer code. It should start with SL."));
     }
     return json.then(function (t) { return JSON.parse(t); }).catch(function (e) {
-      throw new Error(e && e.message && e.message.indexOf('Second Look') !== -1 ? e.message : "That code isn't complete. Copy it again and paste the whole thing.");
+      throw e && e.friendly ? e : friendlyError("That code isn't complete. Copy it again and paste the whole thing.");
     });
   }
 
@@ -4832,17 +4901,17 @@
       var input = $('codeInput');
       $('codeError').textContent = '';
       if (mode === 'show') {
-        $('codeTitle').textContent = 'Your transfer code';
-        $('codeText').textContent = "Copy this whole code, then on your other device open Settings, press Paste transfer code and paste it there.";
+        $('codeTitle').textContent = T('Your transfer code');
+        $('codeText').textContent = T('Copy this whole code, then on your other device open Settings, press Paste transfer code and paste it there.');
         input.value = code;
         input.readOnly = true;
-        $('btnCodeGo').textContent = 'Copy code';
+        $('btnCodeGo').textContent = T('Copy code');
       } else {
-        $('codeTitle').textContent = 'Paste your transfer code';
-        $('codeText').textContent = 'On your other device, open Settings and press Copy transfer code. Then paste it here.';
+        $('codeTitle').textContent = T('Paste your transfer code');
+        $('codeText').textContent = T('On your other device, open Settings and press Copy transfer code. Then paste it here.');
         input.value = '';
         input.readOnly = false;
-        $('btnCodeGo').textContent = 'Load progress';
+        $('btnCodeGo').textContent = T('Load progress');
       }
       modal.hidden = false;
       document.body.classList.add('modal-open');
@@ -4863,7 +4932,7 @@
       if (this.mode === 'show') {
         input.select();
         copyText(input.value).then(function () {
-          toast('✓', 'Code copied', 'Paste it on your other device in Settings.');
+          toast('✓', T('Code copied'), T('Paste it on your other device in Settings.'));
         });
         return;
       }
@@ -4873,7 +4942,7 @@
           if (applyBackup(obj)) self.close();
         })
         .catch(function (e) {
-          $('codeError').textContent = (e && e.message) || "That code didn't work.";
+          $('codeError').textContent = e && e.friendly ? e.message : T("That code didn't work.");
         });
     }
   };
@@ -4882,7 +4951,7 @@
     $('btnBackupSave').addEventListener('click', function () {
       var blob = new Blob([JSON.stringify(collectBackup())], { type: 'application/json' });
       downloadBlob(blob, backupFileName());
-      toast('✓', 'Backup saved', 'Open Settings on your other device and press Load backup file.');
+      toast('✓', T('Backup saved'), T('Open Settings on your other device and press Load backup file.'));
     });
     $('btnBackupLoad').addEventListener('click', function () { $('backupFile').click(); });
     $('backupFile').addEventListener('change', function () {
@@ -4892,7 +4961,7 @@
       file.text().then(function (t) {
         return applyBackup(JSON.parse(t));
       }).catch(function (e) {
-        toast('!', "Couldn't load that file", e && e.message && e.message.indexOf('JSON') === -1 ? e.message : "This isn't a Second Look backup.");
+        toast('!', T("Couldn't load that file"), e && e.friendly ? e.message : T("This isn't a Second Look backup."));
       });
     });
     $('btnCodeCopy').addEventListener('click', function () {
@@ -4933,11 +5002,11 @@
       return;
     }
     if (installPrompt) {
-      ui.installText.textContent = 'Add Second Look to your home screen. It opens full screen and the bot works without internet.';
+      ui.installText.textContent = T('Add Second Look to your home screen. It opens full screen and the bot works without internet.');
       ui.btnInstall.hidden = false;
       ui.installCard.hidden = false;
     } else if (isIOS()) {
-      ui.installText.textContent = 'On iPhone or iPad: tap the Share button at the bottom of Safari, then choose "Add to Home Screen".';
+      ui.installText.textContent = T('On iPhone or iPad: tap the Share button at the bottom of Safari, then choose "Add to Home Screen".');
       ui.btnInstall.hidden = true;
       ui.installCard.hidden = false;
     } else {
@@ -5149,9 +5218,9 @@
         tone: 'tip',
         icon: S.guardOn ? '✓' : '•',
         text: S.guardOn
-          ? "Coach Guard is on. I'll stop you before a big mistake and explain what's wrong."
-          : 'Coach Guard is off. You play freely, and your big mistakes are still saved in My Blunder Bank.'
-      }], 'Settings');
+          ? T("Coach Guard is on. I'll stop you before a big mistake and explain what's wrong.")
+          : T('Coach Guard is off. You play freely, and your big mistakes are still saved in My Blunder Bank.')
+      }], T('Settings'));
     });
 
     applyEvalVisibility();
@@ -5192,7 +5261,7 @@
       Sound.setEnabled(on);
       ui.soundToggle.setAttribute('aria-checked', String(on));
       ui.btnSoundQuick.setAttribute('aria-pressed', String(on));
-      ui.btnSoundQuick.setAttribute('aria-label', on ? 'Sounds on' : 'Sounds off');
+      ui.btnSoundQuick.setAttribute('aria-label', on ? T('Sounds on') : T('Sounds off'));
       ui.btnSoundQuick.classList.toggle('is-off', !on);
       if (!announce) return;
       saveSettings();
@@ -5205,7 +5274,7 @@
     ui.soundToggle.addEventListener('click', function () { applySound(!S.soundOn, true); });
     ui.btnSoundQuick.addEventListener('click', function () { applySound(!S.soundOn, true); });
     Sound.onPack(function (recorded) {
-      if (recorded) ui.soundHelp.textContent = 'Playing the recorded sounds from your sounds folder.';
+      if (recorded) ui.soundHelp.textContent = T('Playing the recorded sounds from your sounds folder.');
     });
     document.addEventListener('pointerdown', Sound.unlock, true);
     document.addEventListener('keydown', Sound.unlock, true);
@@ -5373,8 +5442,33 @@
     });
   }
 
+  /** Language: the page's own text is translated once, then a change reloads the page. */
+  function setupLanguage() {
+    var I = window.I18N;
+    if (!I) return;
+    I.translateDom(document.body);
+    if (I.lang !== 'en') document.title = T(document.title);
+    function choose(lang) {
+      if (lang === I.lang) return;
+      S.lang = lang;
+      I.choose(lang);
+      saveSettings();
+      location.reload(); // the game in progress is saved on pagehide
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="lang"]'), function (input) {
+      input.checked = input.value === I.lang;
+      input.addEventListener('change', function () { if (input.checked) choose(input.value); });
+    });
+    var sel = $('langSelect');
+    if (sel) {
+      sel.value = I.lang;
+      sel.addEventListener('change', function () { choose(sel.value); });
+    }
+  }
+
   function init() {
     loadSettings();
+    setupLanguage();
     Progress.load();
     bindUI();
     Bank.init();

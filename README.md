@@ -1,6 +1,6 @@
 # Second Look: chess trainer with a live coach
 
-A free, static chess practice site. You play Stockfish, a coach checks every move before it lands, and every blunder you make becomes a puzzle in your own Blunder Bank.
+A free, static chess site for complete beginners. Short lessons teach the pieces, 1,366 beginner puzzles build your eye, and when you play the bots a coach checks every move before it lands. Every blunder you make becomes a puzzle in your own Blunder Bank. The site works in English, Bahasa Melayu and Chinese, installs on a phone like an app, and runs offline after the first visit.
 
 No build step, no server, no accounts. Everything runs in the browser and saves to `localStorage`.
 
@@ -35,20 +35,43 @@ Then open `http://localhost:3000` (or `:8000`).
 
 ## Layout
 
-A sidebar on the left switches between **Home**, **Play**, **Blunder Bank** and **Settings**. The board sits in the middle with player bars above and below it. The right panel has three tabs: **Game** (status, controls, game summary, coach notes, moves), **New game** (choose your colour and time limit, then pick a bot from six cards) and **Settings** (Coach Guard, evaluation bar, sounds, board colour). On phones the sidebar turns into a slide-out menu behind the ☰ button, the top bar gets quick buttons for the Blunder Bank and sound, and the site opens on **Home**: a Play card with level chips and a big Start game button, shortcut buttons, a puzzle card showing your newest saved blunder, your game history, and stats (games, wins, Coach Guard saves, puzzles solved and waiting). Finishing games without a blunder builds a clean-game streak. During a game on a phone, the board runs edge to edge between the two player bars, the panel tabs become an icon bar under the board, and the step buttons stay pinned to the bottom of the screen. The evaluation bar is left out on phones to keep the board full width; the score still shows next to the status.
+A sidebar on the left switches between **Home**, **Learn**, **Play**, **Puzzles**, **Blunder Bank** and **Settings**, with a language picker at the bottom. The board sits in the middle with player bars above and below it. The right panel has three tabs: **Game** (status, controls, game summary, coach notes, moves), **New game** (choose your colour and time limit, then pick a bot from six cards) and **Settings** (Coach Guard, evaluation bar, sounds, board colour). On phones the sidebar turns into a slide-out menu behind the ☰ button, the top bar gets quick buttons for the Blunder Bank and sound, and the site opens on **Home**: a Play card with level chips and a big Start game button, shortcut buttons, a puzzle card showing your newest saved blunder, your game history, and stats (games, wins, Coach Guard saves, puzzles solved and waiting). Finishing games without a blunder builds a clean-game streak. During a game on a phone, the board runs edge to edge between the two player bars, the panel tabs become an icon bar under the board, and the step buttons stay pinned to the bottom of the screen. The evaluation bar is left out on phones to keep the board full width; the score still shows next to the status.
 
 ## What's inside
 
 | File | Job |
 | --- | --- |
-| `index.html` | Sidebar, board, right panel with Game / New game / Settings tabs, Tailwind CDN, chess.js CDN, Cburnett piece SVGs, promotion and Coach Guard modals |
+| `index.html` | Sidebar, Home, Learn, Play, Puzzles and Blunder Bank views, right panel with Game / New game / Settings tabs, promotion, Coach Guard and transfer-code dialogs, share and search tags |
 | `style.css` | Grey theme, board colours, highlights, danger pulse, menu cards, responsive rules |
 | `stockfish-worker.js` | Web Worker that loads Stockfish 10 from cdnjs (jsDelivr as backup) and answers search requests as JSON. Falls back to a small built-in engine if both CDNs are blocked |
 | `coach.js` | Plain-English move explanations (hanging pieces, checks, center control, castling, evaluation swings) and the Blunder Bank storage |
-| `app.js` | Board rendering and piece animation, click or drag to move, pawn promotion, sound effects, the game loop, Coach Guard, replay, game summary, puzzle trainer |
-| `vercel.json` | `cleanUrls` so Vercel serves `index.html` at `/` |
+| `app.js` | Board rendering and piece animation, click or drag to move, pawn promotion, sound effects, the game loop, Coach Guard, replay, game summary, lessons, puzzles, XP and badges, sharing, backups |
+| `lessons.js` | The 21 lessons in Learn (positions, goals and text) |
+| `puzzles.json` | 1,366 beginner puzzles from the Lichess puzzle database |
+| `i18n.js` | Picks the language and translates text (`T('English text')`) |
+| `lang.js` | Bahasa Melayu and Chinese, as rows of `[English, Malay, Chinese]`. Only loaded when one of them is chosen |
+| `sw.js`, `manifest.webmanifest`, `icons/` | Install as an app and play offline |
+| `about.html`, `og-image.png`, `robots.txt`, `sitemap.xml` | The About page and what search engines and chat apps show |
+| `tools/check-lang.js` | Lists any English text that still needs a Malay or Chinese translation |
+| `vercel.json` | `cleanUrls` so Vercel serves `index.html` at `/`, and no caching for `sw.js` |
 
 ## How the features work
+
+**Learn.** 21 lessons in six units: how the pieces move, check and checkmate, special moves, winning pieces, basic checkmates and how to start a game. Each lesson is a few steps on a real board: collect stars with one piece, find a move that does something (give check, block, castle, promote), or play a short ending against the bot. Wrong moves get a hint about what to try instead, and progress is saved per lesson.
+
+**Puzzles.** Beginner puzzles from real games on Lichess: checkmate in 1 and 2, free pieces, forks, pins, back-row mates and pawn promotion. The bot plays the first move, then you find the answer. Pick a type or mix them. Your puzzle rating starts at 600 and moves like a chess rating: up when you solve one, down when you miss it.
+
+**Daily practice.** Every game, puzzle and lesson step earns XP, and XP raises your level (Pawn up to King). Home shows today's goal (finish a game, solve 3 puzzles, do a lesson step), a puzzle of the day that is the same for everyone, your day streak, and 16 badges.
+
+**Try that moment again.** After a game, Key moments lists your biggest mistakes and the bot's slips. **Try again** starts a new game from just before your mistake, so you can find the better move. **Play from here** works from any position while you step through a game.
+
+**Languages.** English, Bahasa Melayu and 中文 (Simplified Chinese). The site picks the browser's language the first time; change it with the picker at the bottom of the sidebar (the ☰ menu on phones) or in Settings. The coach's explanations, lessons, puzzles, badges and the About page are all translated. Chess words follow common local use: in Malay raja, menteri, tir, gajah, kuda, bidak, sah and sah mati; in Chinese 王, 后, 车, 象, 马, 兵, 将军 and 将死.
+
+**Install as an app.** On Android and desktop Chrome, Home shows an **Install app** button. On iPhone and iPad it explains Share, then Add to Home Screen. Once installed (or after one visit), the bots, lessons and puzzles work without internet.
+
+**Move to another device.** Progress is saved in the browser, so there are no accounts. Settings → Move to another device makes a backup file or a transfer code (a long text you can paste into a chat to yourself) that loads everything on another phone or computer.
+
+**Share.** After a game, **Share result** makes a picture of the final board with the result and opens your phone's share menu, or saves the picture and copies the link on a computer.
 
 **Coach Guard.** While you think, Stockfish evaluates the position. When you move, it evaluates the new position too. If your move drops the evaluation by more than 1.5 pawns (scores are capped at ±10 so mates and huge leads don't trigger false alarms), the move pauses, the threatened square pulses red, and you choose **Undo & Rethink** or **Play Anyway**. Turn the guard off in the Settings tab of the right panel to play freely.
 
@@ -102,12 +125,15 @@ Use sounds you are allowed to publish, since files in a public repo can be downl
 - Coach analysis depth and time: `ANALYSIS` in `app.js`.
 - Bot levels: the `LEVELS` array in `app.js`.
 - Board colours: the `body[data-board="…"]` rules at the top of `style.css`.
+- Wording in Malay or Chinese: edit the row in `lang.js` (the English in the first column has to stay exactly as it is in the code). After changing any English text, run `node tools/check-lang.js` to see what still needs translating.
+- Lessons: `lessons.js`. Puzzles: `puzzles.json` (`[id, FEN, "moves", rating, "themes"]`).
 
 ## Credits and licenses
 
 - **Stockfish 10** via [stockfish.js](https://github.com/lichess-org/stockfish.js), GPLv3. It's loaded from a public CDN at runtime, not bundled.
 - **chess.js** 0.10.3 by Jeff Hlywa, BSD-2-Clause.
 - **Chess pieces** by Cburnett, [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/), via Wikimedia Commons.
+- **Puzzles** from the [Lichess puzzle database](https://database.lichess.org/#puzzles), CC0 (public domain).
 - **Tailwind CSS** Play CDN, MIT. Fonts: Atkinson Hyperlegible and Bricolage Grotesque (SIL Open Font License) from Google Fonts.
 
 The Tailwind Play CDN prints a console note that it is meant for development. It works fine for a hobby site. For a larger production deployment you can swap it for a compiled Tailwind stylesheet.
