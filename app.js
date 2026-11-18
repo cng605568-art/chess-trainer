@@ -1272,6 +1272,7 @@
     boardThemeChosen: false,
     started: false,
     viewPly: null, // null = live position; a number = replaying that ply
+    startFen: null, // set when a game starts from a position (try again / play from here)
     liveEval: null,
     summaryStartPly: 0,
     review: { quality: {}, evals: {}, saves: 0 }
@@ -1334,6 +1335,7 @@
       v: 1,
       moves: moves,
       playerColor: S.playerColor,
+      startFen: S.startFen || '',
       gameId: S.gameId,
       clock: { base: Clock.base, inc: Clock.inc, w: Math.round(Clock.value('w')), b: Math.round(Clock.value('b')) },
       savedAt: stamp
@@ -1763,7 +1765,14 @@
     Object.keys(S.review.evals).forEach(function (k) { if (+k > len) delete S.review.evals[k]; });
   }
 
-  function newGame() {
+  /**
+   * Start a game. opts (optional):
+   *   fen    start from this position instead of the usual start
+   *   color  play this colour (default: the New game choice)
+   *   retry  { move, drop }: replaying a mistake, so the coach can remind you
+   */
+  function newGame(opts) {
+    opts = opts || {};
     if (S.closeGuard) S.closeGuard();
     if (S.closePromotion) S.closePromotion();
     cancelEngineWork();
@@ -1773,9 +1782,10 @@
     hideSummary();
     var tc = TIME_CONTROLS[S.timeChoice] || TIME_CONTROLS.none;
     Clock.reset(tc.base, tc.inc);
-    S.game = new window.Chess();
+    S.startFen = opts.fen || null;
+    S.game = S.startFen ? new window.Chess(S.startFen) : new window.Chess();
     S.gameId = makeId();
-    S.playerColor = S.colorChoice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : S.colorChoice;
+    S.playerColor = opts.color || (S.colorChoice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : S.colorChoice);
     S.orientation = S.playerColor;
     S.lastPlayerEvalP = null;
     S.liveEval = null;
@@ -1793,6 +1803,18 @@
     engine.newGame();
     Sound.play('start');
     if (S.engineNotice) pushNotes([S.engineNotice], 'Engine');
+    if (opts.retry || S.startFen) {
+      var mine = S.playerColor === 'w' ? 'White' : 'Black';
+      var tipText = opts.retry && opts.retry.move
+        ? "Let's try that moment again. Last time you chose to " + C.moveAction(opts.retry.move, true) + ', which was ' + C.lossLike(opts.retry.drop || 0) +
+          '. Take a second look: what can the bot do after your move?'
+        : 'Playing on from this position. You are ' + mine + ', against the ' + LEVELS[S.levelIndex].name + ' bot.';
+      pushNotes([{ tone: 'tip', icon: '↻', text: tipText }], opts.retry ? 'Try again' : 'Play from here');
+      saveGame();
+      if (S.game.turn() === S.playerColor) playerTurn(null);
+      else botTurn();
+      return;
+    }
     pushNotes([{
       tone: 'tip',
       icon: '♔',
@@ -1814,13 +1836,22 @@
     if (!raw) return false;
     var data;
     try { data = JSON.parse(raw); } catch (e) { return false; }
-    if (!data || !Array.isArray(data.moves) || !data.moves.length || (data.playerColor !== 'w' && data.playerColor !== 'b')) return false;
-    var g = new window.Chess();
+    if (!data || !Array.isArray(data.moves) || (data.playerColor !== 'w' && data.playerColor !== 'b')) return false;
+    var startFen = typeof data.startFen === 'string' && data.startFen ? data.startFen : null;
+    if (!data.moves.length && !startFen) return false;
+    var g;
+    try {
+      g = startFen ? new window.Chess(startFen) : new window.Chess();
+    } catch (e) {
+      return false;
+    }
+    if (startFen && g.fen().split(' ')[0] !== startFen.split(' ')[0]) return false;
     for (var i = 0; i < data.moves.length; i++) {
       if (typeof data.moves[i] !== 'string' || !safeMove(g, uciToMove(data.moves[i]))) return false;
     }
     if (ChessAPI.isGameOver(g)) return false;
     S.game = g;
+    S.startFen = startFen;
     S.playerColor = data.playerColor;
     S.orientation = data.playerColor;
     S.gameId = typeof data.gameId === 'string' ? data.gameId : makeId();
@@ -2020,7 +2051,7 @@
     var term = terminalInfo(S.game);
     var ply = hist.length;
     var cls = classifyMove(verdict);
-    if (cls) S.review.quality[ply] = { cls: cls, san: mv.san, drop: verdict.drop };
+    if (cls) S.review.quality[ply] = { cls: cls, san: mv.san, drop: verdict.drop, best: verdict.isBest ? null : verdict.bestMove };
     if (after && after.hasScore) S.review.evals[ply] = after.whiteCp;
     renderMoveList();
     var tips = C.describeMove({
@@ -2171,6 +2202,7 @@
     store.remove(GAME_KEY);
     var outcome = gameOutcome(term);
     setStatus(outcome.status, 'over', 'Replay the game to see where it turned, or start a new one.');
+    ui.evalChip.textContent = outcome.result === 'win' ? 'You won' : outcome.result === 'loss' ? 'Bot won' : 'Draw';
     refreshControls();
     Sound.play(outcome.result === 'win' ? 'win' : outcome.result === 'loss' ? 'lose' : 'draw');
     recordGame(term, outcome.result);
@@ -2257,7 +2289,7 @@
 
   function gameAtPly(ply) {
     var hist = S.game.history({ verbose: true });
-    var g = new window.Chess();
+    var g = S.startFen ? new window.Chess(S.startFen) : new window.Chess();
     for (var i = 0; i < ply && i < hist.length; i++) {
       var m = hist[i];
       safeMove(g, m.promotion ? { from: m.from, to: m.to, promotion: m.promotion } : { from: m.from, to: m.to });
@@ -2309,6 +2341,7 @@
   function renderReviewBar() {
     var viewing = S.viewPly !== null;
     ui.reviewBar.hidden = !viewing;
+    if (viewing) ui.btnPlayFrom.disabled = ChessAPI.isGameOver(gameAtPly(S.viewPly));
     ui.boardWrap.classList.toggle('is-reviewing', viewing);
     if (!viewing) stopAutoplay();
     renderNav();
@@ -2344,6 +2377,7 @@
       if (q.cls === 'blunder' && (firstBlunder === null || ply < firstBlunder)) firstBlunder = ply;
     });
     ui.summaryResult.textContent = gameOutcome(term).summary;
+    renderMoments();
     Array.prototype.forEach.call(ui.summaryPanel.querySelectorAll('[data-q]'), function (el) {
       el.textContent = String(counts[el.dataset.q] || 0);
     });
@@ -2361,6 +2395,107 @@
     S.summaryStartPly = firstBlunder ? firstBlunder - 1 : 0;
     ui.btnSummaryReview.textContent = firstBlunder ? 'Replay from your first big mistake' : 'Replay the game';
     ui.summaryPanel.hidden = false;
+  }
+
+  /**
+   * The turning points of a finished game: your biggest mistakes (from the
+   * move ratings) and the bot's slips (big swings in your favour).
+   */
+  function keyMoments() {
+    var hist = S.game.history({ verbose: true });
+    var list = [];
+    Object.keys(S.review.quality).forEach(function (k) {
+      var p = +k;
+      var q = S.review.quality[k];
+      if (p > hist.length || (q.cls !== 'blunder' && q.cls !== 'mistake')) return;
+      list.push({ ply: p, move: hist[p - 1], mine: true, size: q.drop, q: q });
+    });
+    var ev = S.review.evals;
+    for (var p = 1; p <= hist.length; p++) {
+      var m = hist[p - 1];
+      if (m.color === S.playerColor || typeof ev[p] !== 'number' || typeof ev[p - 1] !== 'number') continue;
+      var swing = C.clampCp(C.perspective(ev[p], S.playerColor)) - C.clampCp(C.perspective(ev[p - 1], S.playerColor));
+      if (swing >= C.BLUNDER_CP) list.push({ ply: p, move: m, mine: false, size: swing });
+    }
+    list.sort(function (a, b) { return b.size - a.size; });
+    return list.slice(0, 3).sort(function (a, b) { return a.ply - b.ply; });
+  }
+
+  function renderMoments() {
+    var moments = keyMoments();
+    var ol = ui.momentsList;
+    ol.innerHTML = '';
+    ui.momentsWrap.hidden = moments.length === 0;
+    var biggest = null;
+    moments.forEach(function (mo) {
+      if (mo.mine && (!biggest || mo.size > biggest.size)) biggest = mo;
+      var li = document.createElement('li');
+      li.className = 'moment ' + (mo.mine ? 'is-mistake' : 'is-chance');
+      var mark = document.createElement('span');
+      mark.className = 'moment-mark';
+      mark.setAttribute('aria-hidden', 'true');
+      mark.textContent = mo.mine ? (mo.q.cls === 'blunder' ? '??' : '?') : '!';
+      var text = document.createElement('span');
+      text.className = 'moment-text';
+      var title = document.createElement('span');
+      title.className = 'moment-title';
+      title.textContent = 'Move ' + Math.ceil(mo.ply / 2) + '. ' + C.moveTitle(mo.move, mo.mine);
+      var sub = document.createElement('span');
+      sub.className = 'moment-sub';
+      if (mo.mine) {
+        var bestMv = mo.q.best ? describeUci(gameAtPly(mo.ply - 1).fen(), mo.q.best) : null;
+        sub.textContent = (mo.q.cls === 'blunder' ? 'Big mistake: ' : 'Mistake: ') + 'that was ' + C.lossLike(mo.size) + '.' +
+          (bestMv ? ' Better was to ' + C.moveAction(bestMv, true) + '.' : '');
+      } else {
+        var reply = S.review.quality[mo.ply + 1];
+        sub.textContent = 'The bot slipped: its move was ' + C.lossLike(mo.size) + '.' +
+          (reply ? (reply.cls === 'best' || reply.cls === 'good' ? ' You made the most of it!' : ' Did you spot the chance?') : '');
+      }
+      text.appendChild(title);
+      text.appendChild(sub);
+      var actions = document.createElement('span');
+      actions.className = 'moment-actions';
+      var show = document.createElement('button');
+      show.type = 'button';
+      show.className = 'btn btn-ghost';
+      show.dataset.show = String(mo.mine ? mo.ply - 1 : mo.ply);
+      show.textContent = 'Show';
+      show.setAttribute('aria-label', 'Show the board at move ' + Math.ceil(mo.ply / 2));
+      actions.appendChild(show);
+      if (mo.mine) {
+        var retry = document.createElement('button');
+        retry.type = 'button';
+        retry.className = 'btn btn-ghost';
+        retry.dataset.retry = String(mo.ply);
+        retry.textContent = 'Try again';
+        retry.setAttribute('aria-label', 'Play from just before this mistake');
+        actions.appendChild(retry);
+      }
+      li.appendChild(mark);
+      li.appendChild(text);
+      li.appendChild(actions);
+      ol.appendChild(li);
+    });
+    S.retryPly = biggest ? biggest.ply : null;
+    ui.btnSummaryRetry.hidden = !biggest;
+  }
+
+  /**
+   * Start a new game from the position after `ply` moves of this game.
+   * mistakePly: replaying the player's mistake played on that ply.
+   */
+  function playFrom(ply, mistakePly) {
+    if (S.phase === 'warning' || S.phase === 'promoting') return;
+    var hist = S.game.history({ verbose: true });
+    ply = Math.max(0, Math.min(hist.length, ply));
+    var g = gameAtPly(ply);
+    if (ChessAPI.isGameOver(g)) return;
+    if (S.phase !== 'over' && hist.length && !window.confirm('Start a new game from this position? Your current game will end.')) return;
+    var q = mistakePly ? S.review.quality[mistakePly] : null;
+    var retry = mistakePly ? { move: hist[mistakePly - 1], drop: q ? q.drop : 0 } : null;
+    newGame({ fen: g.fen(), color: S.playerColor, retry: retry });
+    showPane('game');
+    if (isMobile()) ui.boardWrap.scrollIntoView({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
   }
 
   function drawEvalGraph(len) {
@@ -2469,6 +2604,7 @@
   function showHome() {
     S.started = false;
     S.phase = 'idle';
+    S.startFen = null;
     S.game = new window.Chess();
     S.playerColor = S.colorChoice === 'b' ? 'b' : 'w';
     S.orientation = S.playerColor;
@@ -4576,6 +4712,10 @@
       btnSummaryBank: $('btnSummaryBank'),
       btnSummaryReview: $('btnSummaryReview'),
       installCard: $('installCard'),
+      btnPlayFrom: $('btnPlayFrom'),
+      btnSummaryRetry: $('btnSummaryRetry'),
+      momentsWrap: $('momentsWrap'),
+      momentsList: $('momentsList'),
       levelName: $('levelName'),
       levelGlyph: $('levelGlyph'),
       xpFill: $('xpFill'),
@@ -4772,6 +4912,25 @@
 
     // End-of-game summary.
     ui.btnSummaryBank.addEventListener('click', function () { showTab('bank'); });
+    ui.btnSummaryRetry.addEventListener('click', function () {
+      if (S.retryPly) playFrom(S.retryPly - 1, S.retryPly);
+    });
+    ui.momentsList.addEventListener('click', function (e) {
+      var show = e.target.closest('[data-show]');
+      if (show) {
+        stepTo(parseInt(show.dataset.show, 10));
+        if (isMobile()) ui.boardWrap.scrollIntoView({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+        return;
+      }
+      var retry = e.target.closest('[data-retry]');
+      if (retry) {
+        var p = parseInt(retry.dataset.retry, 10);
+        playFrom(p - 1, p);
+      }
+    });
+    ui.btnPlayFrom.addEventListener('click', function () {
+      if (S.viewPly !== null) playFrom(S.viewPly, null);
+    });
     ui.btnSummaryReview.addEventListener('click', function () {
       stepTo(S.summaryStartPly);
       if (window.matchMedia('(max-width: 1023px)').matches) {

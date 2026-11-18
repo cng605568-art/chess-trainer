@@ -317,6 +317,7 @@
 
           <div class="review-bar" id="reviewBar" hidden>
             <span class="review-label" id="reviewLabel" aria-live="polite">Start position</span>
+            <button type="button" class="btn btn-ghost" id="btnPlayFrom">Play from here</button>
             <button type="button" class="btn btn-primary" id="btnLive">Back to game</button>
           </div>
         </div>
@@ -375,8 +376,13 @@
                 <li class="q-blunder"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Big mistakes</span><span class="q-count" data-q="blunder">0</span></li>
               </ul>
               <p class="summary-line" id="summaryLine"></p>
+              <div class="moments" id="momentsWrap" hidden>
+                <h3 class="moments-title font-display">Key moments</h3>
+                <ol class="moments-list" id="momentsList"></ol>
+              </div>
               <div class="summary-actions">
-                <button type="button" class="btn btn-primary" id="btnSummaryBank">Practice these mistakes</button>
+                <button type="button" class="btn btn-primary" id="btnSummaryRetry" hidden>Try your biggest mistake again</button>
+                <button type="button" class="btn btn-ghost" id="btnSummaryBank">Practice these mistakes</button>
                 <button type="button" class="btn btn-ghost" id="btnSummaryReview">Replay the game</button>
               </div>
             </section>
