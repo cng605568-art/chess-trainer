@@ -342,27 +342,67 @@ a {
   color: var(--silver-ink);
 }
 
+/* Your avatar in a game: a plain pawn on grey. */
+.avatar.avatar-pawn {
+  background: #a4a4a4;
+  color: #f6f6f6;
+}
+
+.avatar-pawn svg {
+  width: 82%;
+  height: 82%;
+  margin-top: 6%;
+}
+
+/* Bot avatars use the same greys as the bot level cards. */
+.avatar[data-level="0"] { background: #e4e4e4; color: #2a2a2a; }
+.avatar[data-level="1"] { background: #c4c4c4; color: #222; }
+.avatar[data-level="2"] { background: #9e9e9e; color: #1a1a1a; }
+.avatar[data-level="3"] { background: #747474; color: #f4f4f4; }
+.avatar[data-level="4"] { background: #525252; color: #f4f4f4; }
+.avatar[data-level="5"] { background: #1a1a1a; color: #f4f4f4; box-shadow: inset 0 0 0 2px #6a6a6a; }
+
 .strip-text {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
 
 .strip-line {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .strip-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
   font: 700 0.98rem/1.25 var(--font-display);
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .strip-side {
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
   color: var(--muted);
   font-size: 0.85rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.strip-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 18px;
 }
 
 .strip-caps {
@@ -386,10 +426,60 @@ a {
 }
 
 .strip-adv {
-  margin-left: auto;
   color: var(--muted);
+  font-size: 0.82rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+/* Clocks: dark while waiting, white while that side is thinking. */
+.clock {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 124px;
+  height: 46px;
+  padding: 0 12px;
+  border-radius: 4px;
+  background: #1e1e1e;
+  color: #8c8c8c;
+  font: 700 1.65rem/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.clock-icon {
+  display: none;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-right: auto;
+}
+
+.clock.is-running {
+  background: #f2f2f2;
+  color: #1d1d1d;
+}
+
+.clock.is-running .clock-icon {
+  display: block;
+}
+
+.clock.is-low {
+  color: #ff8a84;
+}
+
+.clock.is-low.is-running {
+  background: #f8d7d4;
+  color: #9e1f17;
+}
+
+.clock.is-flagged {
+  background: rgba(229, 83, 75, 0.22);
+  color: #ff8a84;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -495,8 +585,8 @@ a {
 
 .coord {
   position: absolute;
-  z-index: 2;
-  font: 700 clamp(8px, 1.7cqw, 14px)/1 var(--font-display);
+  z-index: 3;
+  font: 700 clamp(9px, 2.5cqw, 16px)/1 var(--font-display);
   pointer-events: none;
 }
 
@@ -675,7 +765,7 @@ body.hide-eval .eval-chip {
 .review-label {
   flex: 1;
   min-width: 0;
-  text-align: center;
+  padding-left: 8px;
   font: 700 0.95rem var(--font-display);
   font-variant-numeric: tabular-nums;
 }
@@ -843,6 +933,85 @@ body.hide-eval .eval-chip {
   color: var(--ink);
   border-bottom-color: var(--silver);
   background: var(--panel);
+}
+
+/* Tab icons only show in the phone tab bar. */
+.side-tab-icon {
+  display: none;
+}
+
+/* Step buttons: first, back, play through, forward, last */
+.move-nav {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  padding: 10px 12px 13px;
+  background: var(--panel-head);
+  border-top: 1px solid var(--line);
+}
+
+.nav-step {
+  display: grid;
+  flex: 1 1 0;
+  place-items: center;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: #3a3a3a;
+  color: #ececec;
+  box-shadow: 0 3px 0 #141414;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.12s ease;
+}
+
+.nav-step:not(:disabled):hover {
+  background: #464646;
+}
+
+.nav-step:not(:disabled):active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #141414;
+}
+
+.nav-step:disabled {
+  color: #646464;
+  cursor: default;
+}
+
+.nav-step svg {
+  width: 22px;
+  height: 22px;
+}
+
+.nav-step .ico-pause,
+.nav-step.is-playing .ico-play {
+  display: none;
+}
+
+.nav-step.is-playing .ico-pause {
+  display: block;
+}
+
+.nav-step.is-playing {
+  background: var(--silver);
+  color: var(--silver-ink);
+}
+
+.time-help {
+  margin: 8px 2px 0;
+}
+
+.segmented-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.segmented-4 span {
+  padding: 0 2px;
+  font-size: 0.86rem;
+  white-space: nowrap;
 }
 
 .side-body {
@@ -2585,25 +2754,134 @@ button.move-san:hover {
   .home-col {
     gap: 12px;
   }
+
+  /* Game panel as a phone app screen: icon tab bar, step buttons pinned at the bottom. */
+  #view-play .side-head {
+    display: none;
+  }
+
+  .side-panel {
+    overflow: hidden;
+    overflow: clip;
+  }
+
+  .side-tabs {
+    background: #262626;
+    border-bottom: 0;
+  }
+
+  .side-tab {
+    -webkit-tap-highlight-color: transparent;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: 64px;
+    padding: 9px 4px 8px;
+    border-bottom: 0;
+    font-size: 0.86rem;
+  }
+
+  .side-tab[aria-selected="true"] {
+    background: #181818;
+  }
+
+  .side-tab-icon {
+    display: block;
+    width: 26px;
+    height: 26px;
+  }
+
+  .side-tab-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .side-tab[aria-selected="true"] .side-tab-icon {
+    color: #f6f6f6;
+  }
+
+  .move-nav {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    padding-bottom: calc(13px + env(safe-area-inset-bottom));
+    box-shadow: 0 -10px 18px -12px rgba(0, 0, 0, 0.7);
+  }
 }
 
 @media (max-width: 640px) {
+  /* Edge-to-edge board, the way chess apps lay out a game on a phone. */
+  #view-play,
+  #view-bank {
+    gap: 0;
+    margin: -14px -14px 0;
+  }
+
+  #view-play .play-col,
+  #view-bank .play-col {
+    max-width: none;
+  }
+
+  #view-play .side-panel,
+  #view-bank .side-panel {
+    margin-top: 6px;
+    border-radius: 0;
+    overflow: visible;
+  }
+
   .evalbar {
-    width: 10px;
+    display: none;
   }
 
   .board-row {
-    gap: 6px;
+    gap: 0;
+  }
+
+  .board {
+    box-shadow: none;
+  }
+
+  .board-row.is-reviewing .board {
+    box-shadow: none;
+  }
+
+  /* Replay ring drawn inside the board, since the board touches the screen edges. */
+  .board-row.is-reviewing .board::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 3px rgba(127, 176, 232, 0.9);
   }
 
   .player-strip {
-    min-height: 46px;
+    min-height: 58px;
+    padding: 7px 10px;
   }
 
   .avatar {
-    width: 34px;
-    height: 34px;
-    font-size: 20px;
+    width: 42px;
+    height: 42px;
+    font-size: 26px;
+  }
+
+  .clock {
+    min-width: 112px;
+    height: 44px;
+    padding: 0 10px;
+    font-size: 1.55rem;
+  }
+
+  .clock-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .review-bar {
+    margin: 0 10px 4px;
   }
 
   .menu-card {
@@ -2638,5 +2916,21 @@ button.move-san:hover {
 @media (max-width: 370px) {
   .brand-bar .brand-name {
     display: none;
+  }
+
+  .clock {
+    min-width: 98px;
+    font-size: 1.35rem;
+  }
+
+  .avatar {
+    width: 38px;
+    height: 38px;
+  }
+
+  .move-nav {
+    gap: 6px;
+    padding-left: 8px;
+    padding-right: 8px;
   }
 }
