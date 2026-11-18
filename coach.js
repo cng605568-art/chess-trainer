@@ -292,23 +292,145 @@
     return rounded + (rounded === 1 ? ' pawn' : ' pawns');
   }
 
-  /** Plain-English summary of an evaluation from the player's side. */
-  function describeEval(cpPlayer, opponentName) {
+  /* ---------------------------------------------------------------------- */
+  /* Beginner words: values as pieces, moves as sentences                   */
+  /* ---------------------------------------------------------------------- */
+
+  /** Size of a score swing, measured in pieces a beginner knows. */
+  function worthStep(cp) {
+    var a = Math.abs(cp) / 100;
+    if (a < 0.75) return 'little';
+    if (a < 1.5) return 'pawn';
+    if (a < 2.5) return 'pawns2';
+    if (a < 4) return 'minor';
+    if (a < 6.5) return 'rook';
+    if (a < 12) return 'queen';
+    return 'more';
+  }
+
+  var LOSS_WORDS = {
+    little: 'a tiny bit',
+    pawn: 'a pawn',
+    pawns2: 'two pawns',
+    minor: 'a knight or a bishop',
+    rook: 'a rook',
+    queen: 'a queen',
+    more: 'more than a queen'
+  };
+
+  var EXTRA_WORDS = {
+    little: 'a tiny edge',
+    pawn: 'an extra pawn',
+    pawns2: 'two extra pawns',
+    minor: 'an extra knight',
+    rook: 'an extra rook',
+    queen: 'an extra queen',
+    more: 'more than an extra queen'
+  };
+
+  var LOSS_GLYPHS = { little: '−', pawn: '−♟', pawns2: '−♟♟', minor: '−♞', rook: '−♜', queen: '−♛', more: '−♛+' };
+
+  /** "like giving away a knight or a bishop" */
+  function lossLike(cp) {
+    return 'like giving away ' + LOSS_WORDS[worthStep(cp)];
+  }
+
+  /** "an extra knight" */
+  function extraWords(cp) {
+    return EXTRA_WORDS[worthStep(cp)];
+  }
+
+  /** "−♞": a loss drawn as the piece it's worth. */
+  function lossGlyphs(cp) {
+    return LOSS_GLYPHS[worthStep(cp)];
+  }
+
+  /** Plain-English summary of who's ahead, from the player's side. */
+  function describeEval(cpPlayer) {
     if (isMateScore(cpPlayer)) {
       var n = mateDistance(cpPlayer);
-      if (cpPlayer > 0) return n <= 1 ? 'You can deliver checkmate right now.' : 'You have a forced checkmate in ' + n + '.';
-      return n <= 1 ? opponentName + ' is threatening checkmate.' : opponentName + ' has a forced checkmate in ' + n + '.';
+      if (cpPlayer > 0) {
+        return n <= 1
+          ? 'You can checkmate the bot right now! Look for it.'
+          : 'You can force checkmate in ' + n + ' moves. Look at every check!';
+      }
+      return n <= 1
+        ? 'Danger! The bot is threatening checkmate. Protect your king.'
+        : 'Danger! The bot can force checkmate in ' + n + ' moves.';
     }
     var a = Math.abs(cpPlayer);
-    if (a < 35) return 'The position is roughly equal.';
+    if (a < 35) return "It's an even game.";
     if (cpPlayer > 0) {
-      if (a < 120) return "You're slightly better.";
-      if (a < 400) return "You're ahead by about " + pawnsText(cpPlayer) + '.';
-      return "You're winning. Keep it simple and stay alert.";
+      if (a < 120) return "You're a little ahead.";
+      if (a < 400) return "You're ahead. It's like having " + extraWords(cpPlayer) + '.';
+      return "You're winning! It's like having " + extraWords(cpPlayer) + '. Trade pieces and keep your king safe.';
     }
-    if (a < 120) return opponentName + ' is slightly better.';
-    if (a < 400) return "You're behind by about " + pawnsText(cpPlayer) + '.';
-    return opponentName + ' is winning, but games can still turn around.';
+    if (a < 120) return 'The bot is a little ahead.';
+    if (a < 400) return "The bot is ahead. It's like it has " + extraWords(cpPlayer) + '.';
+    return "The bot is winning, like it has " + extraWords(cpPlayer) + ". Don't give up: bots make mistakes too.";
+  }
+
+  /** Two or three words for the Coach Guard banner: "Even", "Bot is winning". */
+  function shortScore(cpPlayer) {
+    if (isMateScore(cpPlayer)) return cpPlayer > 0 ? 'You can checkmate' : 'Bot can checkmate';
+    var a = Math.abs(cpPlayer);
+    if (a < 35) return 'Even';
+    if (cpPlayer > 0) return a < 120 ? "You're a bit ahead" : a < 400 ? "You're ahead" : "You're winning";
+    return a < 120 ? 'Bot is a bit ahead' : a < 400 ? 'Bot is ahead' : 'Bot is winning';
+  }
+
+  /** The small score chip: "Even", "You +1.5", "Bot +3.0", "Bot: mate in 2". */
+  function scoreChip(cpPlayer) {
+    if (isMateScore(cpPlayer)) {
+      var n = mateDistance(cpPlayer);
+      if (n === 0) return cpPlayer > 0 ? 'You won' : 'Bot won';
+      return (cpPlayer > 0 ? 'You' : 'Bot') + ': mate in ' + n;
+    }
+    var a = Math.abs(cpPlayer) / 100;
+    if (a < 0.35) return 'Even';
+    return (cpPlayer > 0 ? 'You +' : 'Bot +') + a.toFixed(1);
+  }
+
+  function isCastle(m) {
+    var f = (m && m.flags) || '';
+    return f.indexOf('k') !== -1 || f.indexOf('q') !== -1;
+  }
+
+  function isEnPassant(m) {
+    return ((m && m.flags) || '').indexOf('e') !== -1;
+  }
+
+  /**
+   * A move as an action, without a subject, so it fits after "to" or "could":
+   *   mine:  "move your knight from g1 to f3", "take the bot's pawn on e5 with your knight"
+   *   bot's: "move its queen from d8 to h4", "take your rook on a1 with its bishop"
+   */
+  function moveAction(m, mine) {
+    if (!m) return '';
+    var own = mine ? 'your ' : 'its ';
+    var other = mine ? "the bot's " : 'your ';
+    var name = pieceName(m.piece);
+    var promo = m.promotion ? ', turning it into ' + article(pieceName(m.promotion)) : '';
+    if (isCastle(m)) return 'castle (' + own + 'king jumps to ' + m.to + ', where it is safer)';
+    if (isEnPassant(m)) return 'take ' + other + 'pawn by moving ' + own + 'pawn to ' + m.to + ' (a special pawn capture called "en passant")';
+    if (m.captured) return 'take ' + other + pieceName(m.captured) + ' on ' + m.to + ' with ' + own + name + promo;
+    return 'move ' + own + name + ' from ' + m.from + ' to ' + m.to + promo;
+  }
+
+  /** Short label for the coach feed: "You: knight to f3", "Bot: bishop takes pawn on c4". */
+  function moveTitle(m, mine) {
+    if (!m) return mine ? 'You' : 'Bot';
+    var who = mine ? 'You: ' : 'Bot: ';
+    var name = pieceName(m.piece);
+    var promo = m.promotion ? ', becomes ' + article(pieceName(m.promotion)) : '';
+    if (isCastle(m)) return who + 'castled';
+    if (isEnPassant(m)) return who + 'pawn takes pawn (en passant)';
+    if (m.captured) return who + name + ' takes ' + pieceName(m.captured) + ' on ' + m.to + promo;
+    return who + name + ' to ' + m.to + promo;
+  }
+
+  function capitalize(s) {
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
   }
 
   /* ---------------------------------------------------------------------- */
@@ -347,7 +469,7 @@
   };
 
   function finishTips(list, max) {
-    // Drop the generic "solid move" line when there is something more useful to say.
+    // Drop the generic "good move" line when there is something more useful to say.
     if (list.some(function (t) { return t.priority > 5; })) {
       list = list.filter(function (t) { return t.priority !== 5; });
     }
@@ -358,23 +480,22 @@
   }
 
   function gameEndTip(ctx, moverIsPlayer) {
-    var opp = COLOR_NAMES[opposite(ctx.playerColor)];
     if (ctx.isCheckmate) {
       return moverIsPlayer
-        ? tip('good', '★', 'Checkmate! You won the game. Well played.', 100)
-        : tip('bad', '✕', 'Checkmate. ' + opp + ' wins this one. Use Take back to try another idea, or start a new game.', 100);
+        ? tip('good', '★', "Checkmate! The bot's king is trapped and can't escape, so you win. Well played!", 100)
+        : tip('bad', '✕', 'Checkmate. Your king is trapped and can\'t escape, so the bot wins this one. Tap Take back to try a different idea, or start a new game.', 100);
     }
     if (ctx.drawReason === 'stalemate') {
-      return tip('tip', '½', 'Stalemate: the side to move has no legal moves but is not in check, so the game is a draw.', 100);
+      return tip('tip', '½', "Stalemate, so it's a draw. The player whose turn it is has no legal move, but their king isn't under attack.", 100);
     }
     if (ctx.drawReason === 'repetition') {
-      return tip('tip', '½', 'Draw by repetition: the same position appeared three times.', 100);
+      return tip('tip', '½', "It's a draw: the same position came up three times.", 100);
     }
     if (ctx.drawReason === 'insufficient') {
-      return tip('tip', '½', 'Draw: neither side has enough pieces left to deliver checkmate.', 100);
+      return tip('tip', '½', "It's a draw: there aren't enough pieces left for either side to checkmate.", 100);
     }
     if (ctx.drawReason === 'fifty') {
-      return tip('tip', '½', 'Draw by the 50-move rule: 50 moves passed with no capture or pawn move.', 100);
+      return tip('tip', '½', "It's a draw by the 50-move rule: 50 moves in a row went by with no capture and no pawn move.", 100);
     }
     return null;
   }
@@ -385,7 +506,7 @@
    *   move, fenBefore, fenAfter, mover: 'player'|'bot', playerColor,
    *   history (verbose moves incl. this one), prevMove,
    *   inCheck, isCheckmate, drawReason,
-   *   verdict: { isBest, drop, bestSan, isBlunder } | null, savedToBank
+   *   verdict: { isBest, drop, best (move object) | null, isBlunder } | null, savedToBank
    * }
    */
   function describeMove(ctx) {
@@ -394,7 +515,6 @@
     var isPlayer = ctx.mover === 'player';
     var me = ctx.playerColor;
     var oppColor = opposite(me);
-    var oppName = COLOR_NAMES[oppColor];
     var before = parseFen(ctx.fenBefore);
     var after = parseFen(ctx.fenAfter);
     var moveNo = before.fullmove;
@@ -406,91 +526,89 @@
     if (end) tips.push(end);
 
     if (isPlayer) {
-      // --- Engine verdict -------------------------------------------------
+      // --- How good was the move? ---------------------------------------------
       var v = ctx.verdict;
+      var better = v && v.best && !v.isBest ? ' Better was to ' + moveAction(v.best, true) + '.' : '';
       if (v && !ctx.isCheckmate) {
         if (v.isBlunder) {
-          tips.push(tip('bad', '✕', 'Blunder: that cost about ' + pawnsText(v.drop) + '. ' +
-            (v.bestSan ? v.bestSan + ' was the move to find.' : '') +
-            (ctx.savedToBank ? ' Saved to My Blunder Bank.' : ''), 90));
+          tips.push(tip('bad', '✕', 'Big mistake (a "blunder"): that was ' + lossLike(v.drop) + '.' + better +
+            (ctx.savedToBank ? ' It\'s saved in My Blunder Bank so you can practice it later.' : ''), 90));
         } else if (v.drop > MISTAKE_CP) {
-          tips.push(tip('warn', '!', 'Mistake: you gave up about ' + pawnsText(v.drop) + '.' +
-            (v.bestSan ? ' ' + v.bestSan + ' was stronger.' : ''), 80));
+          tips.push(tip('warn', '!', 'Mistake: that was ' + lossLike(v.drop) + '.' + better, 80));
         } else if (v.drop > INACCURACY_CP) {
-          tips.push(tip('tip', '?', 'Playable' + (v.bestSan ? ', though ' + v.bestSan + ' was a little better.' : ', but there was a slightly better move.'), 40));
+          tips.push(tip('tip', '?', 'OK move, but there was a slightly better one.' + better, 40));
         } else if (v.isBest) {
-          tips.push(tip('good', '✓', "That's Stockfish's top choice. Well spotted!", 45));
+          tips.push(tip('good', '✓', 'Excellent! That\'s exactly the move the computer liked best.', 45));
         } else {
-          tips.push(tip('good', '✓', 'Solid move. Your position held steady.', 5));
+          tips.push(tip('good', '✓', "Good move. You didn't give anything away.", 5));
         }
       }
 
       // --- What happened on the board ---------------------------------------
-      if (flags.indexOf('k') !== -1 || flags.indexOf('q') !== -1) {
-        var side = flags.indexOf('k') !== -1 ? 'kingside' : 'queenside';
-        tips.push(tip('good', '♚', 'You castled ' + side + '. Your king is tucked away and your rook can join the game.', 60));
+      if (isCastle(m)) {
+        tips.push(tip('good', '♚', 'You castled. In one move, your king hid in the corner, away from the middle, and a rook came out to help.', 60));
       }
       if (m.promotion) {
-        tips.push(tip('good', GLYPHS[m.promotion], 'Your pawn reached the last row and became ' + article(pieceName(m.promotion)) + '!', 70));
+        tips.push(tip('good', GLYPHS[m.promotion], 'Your pawn reached the far end of the board and turned into ' + article(pieceName(m.promotion)) + '!', 70));
       }
       if (m.captured) {
         var prev = ctx.prevMove;
         var isRecapture = prev && prev.to === m.to && prev.captured;
         var text = isRecapture
-          ? 'You recaptured on ' + m.to + ', winning back the material.'
-          : 'You captured ' + oppName + "'s " + pieceName(m.captured) + ' on ' + m.to + '.';
+          ? 'You took back on ' + m.to + '. You each took a piece, so this is called a trade.'
+          : "You took the bot's " + pieceName(m.captured) + ' on ' + m.to + '.';
         tips.push(tip('tip', GLYPHS[m.captured], text, 30));
       }
       if (ctx.inCheck && !ctx.isCheckmate) {
-        tips.push(tip('tip', '+', 'Check! ' + oppName + "'s king is under attack, so they must deal with it right away.", 35));
+        tips.push(tip('tip', '+', "Check! You're attacking the bot's king, so the bot has to protect it on its next move.", 35));
       }
 
-      // --- Opening habits --------------------------------------------------------
+      // --- Good habits for the first moves ---------------------------------------
       if (opening && m.piece === 'p' && CENTER.indexOf(m.to) !== -1) {
-        tips.push(tip('good', '♟', 'Great central pawn. Pawns in the center give your pieces room and make it harder for ' + oppName + ' to get comfortable.', 25));
+        tips.push(tip('good', '♟', 'Nice! A pawn in the middle of the board gives your pieces room to come out and takes space from the bot.', 25));
       }
       if (opening && (m.piece === 'n' || m.piece === 'b') && BACK_RANK_MINORS[me].indexOf(m.from) !== -1 && !m.captured) {
         if (m.piece === 'n' && (m.to.charAt(0) === 'a' || m.to.charAt(0) === 'h')) {
-          tips.push(tip('tip', '♞', 'Knights on the edge reach fewer squares. Try c3/f3 (or c6/f6) so it helps control the center.', 22));
+          var goodSquares = me === 'w' ? 'c3 or f3' : 'c6 or f6';
+          tips.push(tip('tip', '♞', 'A knight on the edge of the board can reach fewer squares. Knights usually do better closer to the middle, like on ' + goodSquares + '.', 22));
         } else {
-          tips.push(tip('good', glyph, 'Good development. Getting your knights and bishops off the back row early is one of the best opening habits.', 20));
+          tips.push(tip('good', glyph, 'Good! Bringing your knights and bishops out early is one of the best habits in chess.', 20));
         }
       }
       if (moveNo <= 6 && m.piece === 'q' && !m.captured) {
-        tips.push(tip('warn', '♛', 'Careful with early queen trips. ' + oppName + ' can chase her while developing pieces, and you lose time.', 28));
+        tips.push(tip('warn', '♛', 'Careful bringing your queen out this early. The bot can chase her with smaller pieces, and you waste moves running away.', 28));
       }
-      if (moveNo <= 15 && m.piece === 'k' && flags.indexOf('k') === -1 && flags.indexOf('q') === -1) {
+      if (moveNo <= 15 && m.piece === 'k' && !isCastle(m)) {
         var kingIdx = findKing(before.board, me);
         var wasInCheck = kingIdx >= 0 && attackersOf(before.board, kingIdx, oppColor).length > 0;
         if (!wasInCheck && canStillCastle(before.castling, me)) {
-          tips.push(tip('warn', '♚', 'Moving your king this early gives up castling. Castling first usually keeps the king much safer.', 27));
+          tips.push(tip('warn', '♚', "Moving your king this early means you can't castle anymore (castling is the special move that tucks your king safely in the corner).", 27));
         }
       }
       if (moveNo <= 8 && m.piece === 'p' && !m.captured && (m.from.charAt(0) === 'a' || m.from.charAt(0) === 'h')) {
-        tips.push(tip('tip', '♟', 'Edge pawn moves rarely help in the opening. Center pawns and piece development usually do more.', 12));
+        tips.push(tip('tip', '♟', 'Pawns on the edge (the a and h columns) rarely help early on. Middle pawns and bringing out your pieces usually do more.', 12));
       }
       return finishTips(tips, 3);
     }
 
     // ---------------- Bot move -----------------------------------------------
-    if (flags.indexOf('k') !== -1 || flags.indexOf('q') !== -1) {
-      var myHistory = ctx.history || [];
-      var castledAlready = hasCastled(myHistory, me);
-      tips.push(tip('tip', '♚', oppName + ' castled to keep their king safe.' +
-        (!castledAlready && canStillCastle(after.castling, me) ? ' Have you thought about castling too?' : ''), 40));
+    if (isCastle(m)) {
+      var castledAlready = hasCastled(ctx.history || [], me);
+      tips.push(tip('tip', '♚', 'The bot castled: its king is now hiding safely in the corner.' +
+        (!castledAlready && canStillCastle(after.castling, me) ? ' Have you castled yet? It\'s usually a good idea in your first 10 moves.' : ''), 40));
     }
     if (m.promotion) {
-      tips.push(tip('warn', GLYPHS[m.promotion], oppName + "'s pawn promoted to " + article(pieceName(m.promotion)) + '. Watch out for the new piece.', 70));
+      tips.push(tip('warn', GLYPHS[m.promotion], "The bot's pawn reached the end of the board and turned into " + article(pieceName(m.promotion)) + '. Watch out for it!', 70));
     }
     if (m.captured) {
       var p = ctx.prevMove;
       var trade = p && p.to === m.to && p.captured;
       tips.push(tip(trade ? 'tip' : 'warn', GLYPHS[m.captured], trade
-        ? oppName + ' recaptured on ' + m.to + '. That was a trade.'
-        : oppName + ' captured your ' + pieceName(m.captured) + ' on ' + m.to + '.', 50));
+        ? 'The bot took back on ' + m.to + '. You each took a piece, so that was a trade.'
+        : 'The bot took your ' + pieceName(m.captured) + ' on ' + m.to + '.', 50));
     }
     if (ctx.inCheck && !ctx.isCheckmate) {
-      tips.push(tip('warn', '+', 'Check! Your king is under attack. You can move the king, block the check, or capture the attacking piece.', 85));
+      tips.push(tip('warn', '+', 'Check! Your king is under attack. You must save it now: move the king, put a piece in the way, or take the attacking piece.', 85));
     }
     if (!ctx.isCheckmate && !ctx.drawReason) {
       var hanging = findHanging(after.board, me);
@@ -498,29 +616,29 @@
         var h = hanging[0];
         var attacker = h.attackers.slice().sort(function (a, b) { return VALUES[a.t] - VALUES[b.t]; })[0];
         var msg = h.undefended
-          ? 'Heads up: your ' + pieceName(h.t) + ' on ' + h.sq + ' is under attack and nothing protects it.'
-          : 'Heads up: your ' + pieceName(h.t) + ' on ' + h.sq + ' is attacked by ' + article(pieceName(attacker.t)) + '. Even with protection, that trade loses value.';
+          ? 'Watch out: your ' + pieceName(h.t) + ' on ' + h.sq + ' is under attack and nothing protects it. Move it or protect it.'
+          : "Watch out: the bot's " + pieceName(attacker.t) + ' is attacking your ' + pieceName(h.t) + ' on ' + h.sq + '. Even though you could take back, ' +
+            article(pieceName(attacker.t)) + ' is worth less than ' + article(pieceName(h.t)) + ', so you would lose out.';
         tips.push(tip('warn', GLYPHS[h.t], msg, 60));
       }
     }
     if (opening && m.piece === 'p' && CENTER.indexOf(m.to) !== -1 && !m.captured) {
-      tips.push(tip('tip', '♟', oppName + ' is claiming space in the center. Challenge it with your own pawns and pieces.', 10));
+      tips.push(tip('tip', '♟', 'The bot put a pawn in the middle of the board. Try to get your own pawns and pieces into the middle too.', 10));
     }
     return finishTips(tips, 3);
   }
 
   /**
-   * After the bot moves and Stockfish has looked at the new position:
+   * After the bot moves and the computer has looked at the new position:
    * point out when the bot slipped up.
-   * ctx: { prevEvalP, evalP, playerColor, bestMove: {san, captured, to} | null, fen }
+   * ctx: { prevEvalP, evalP, playerColor, bestMove: move object | null, fen }
    */
   function describeOpportunity(ctx) {
     if (typeof ctx.prevEvalP !== 'number' || typeof ctx.evalP !== 'number') return [];
     var gain = clampCp(ctx.evalP) - clampCp(ctx.prevEvalP);
     if (gain <= BLUNDER_CP || ctx.evalP < -200) return [];
-    var oppName = COLOR_NAMES[opposite(ctx.playerColor)];
     if (isMateScore(ctx.evalP) && ctx.evalP > 0) {
-      return [tip('good', '★', oppName + ' just made a big mistake. There is a forced checkmate for you here. Look for checks!', 0)];
+      return [tip('good', '★', "The bot made a big mistake! You can now trap its king (checkmate). Look at every move that attacks the king.", 0)];
     }
     var b = ctx.bestMove;
     if (b && b.captured) {
@@ -528,56 +646,55 @@
       var target = board[sqToIdx(b.to)];
       var defended = target && attackersOf(board, sqToIdx(b.to), target.c).length > 0;
       if (!defended) {
-        return [tip('good', GLYPHS[b.captured], oppName + ' just slipped. Their ' + pieceName(b.captured) + ' on ' + b.to + " isn't protected. Can you win it?", 0)];
+        return [tip('good', GLYPHS[b.captured], "The bot made a mistake! Its " + pieceName(b.captured) + ' on ' + b.to + " has no protection. Can you take it for free?", 0)];
       }
     }
-    return [tip('good', '!', oppName + ' just slipped. There is a chance to gain something. Look at every check, capture and threat.', 0)];
+    return [tip('good', '!', "The bot made a mistake, so there's a chance for you. Look at every check, every capture and every attack.", 0)];
   }
 
   /**
    * Explain why a player move is a blunder, for the Coach Guard banner.
    * ctx: {
    *   move, fenBefore, fenAfter, playerColor, drop, pAfter,
-   *   refutation: { from, to, san, captured, piece, promotion } | null,
-   *   opponentMateIn: number | null, terminal: 'stalemate'|'repetition'|'insufficient'|'fifty'|null,
-   *   bestSan
+   *   refutation: { from, to, san, captured, piece, promotion, flags } | null,
+   *   opponentMateIn: number | null, terminal: 'stalemate'|'repetition'|'insufficient'|'fifty'|null
    * }
    * returns { message, dangerSquares: [], threat: {from,to} | null }
    */
   function explainBlunder(ctx) {
     var me = ctx.playerColor;
     var oppColor = opposite(me);
-    var opp = COLOR_NAMES[oppColor];
     var m = ctx.move;
     var before = parseFen(ctx.fenBefore);
     var after = parseFen(ctx.fenAfter);
     var ref = ctx.refutation;
-    var cost = pawnsText(ctx.drop);
+    var cost = lossLike(ctx.drop);
 
     if (ctx.terminal) {
       var oppKing = findKing(after.board, oppColor);
       var reason = {
-        stalemate: 'This stalemates ' + opp + ": they would have no legal moves, and the game ends in a draw even though you're ahead.",
-        repetition: "This repeats the position a third time, so the game ends in a draw even though you're ahead.",
-        insufficient: 'This leaves too little material to checkmate, so the game ends in a draw.',
-        fifty: 'This triggers the 50-move rule, and the game ends in a draw.'
-      }[ctx.terminal] || 'This ends the game in a draw while you are ahead.';
+        stalemate: "Careful! After this move the bot has no legal move, but its king isn't under attack. That's called stalemate, and the game would end in a draw even though you're ahead.",
+        repetition: "This repeats the same position for the third time, so the game would end in a draw even though you're ahead.",
+        insufficient: "After this, there wouldn't be enough pieces left to checkmate, so the game would end in a draw.",
+        fifty: 'This would end the game in a draw by the 50-move rule (50 moves with no capture and no pawn move).'
+      }[ctx.terminal] || 'This would end the game in a draw while you are ahead.';
       return { message: reason, dangerSquares: oppKing >= 0 ? [idxToSq(oppKing)] : [], threat: null };
     }
 
     if (!ref) {
-      return { message: 'This move costs about ' + cost + ' of value. Look again for something safer.', dangerSquares: [m.to], threat: null };
+      return { message: 'This move is ' + cost + '. Look again for a safer move.', dangerSquares: [m.to], threat: null };
     }
 
     var threat = { from: ref.from, to: ref.to };
+    var botReply = moveAction(ref, false);
 
     if (ctx.opponentMateIn) {
       var myKing = findKing(after.board, me);
       var squares = [ref.to];
       if (myKing >= 0 && idxToSq(myKing) !== ref.to) squares.push(idxToSq(myKing));
       var mateMsg = ctx.opponentMateIn <= 1
-        ? opp + ' can checkmate you right away with ' + ref.san + '.'
-        : 'This lets ' + opp + ' force checkmate in ' + ctx.opponentMateIn + ' moves, starting with ' + ref.san + '.';
+        ? 'Danger! After this, the bot can checkmate you right away: it would ' + botReply + ', and your king could not escape.'
+        : 'Danger! This lets the bot trap your king (checkmate) in ' + ctx.opponentMateIn + ' moves. Its first move would be to ' + botReply + '.';
       return { message: mateMsg, dangerSquares: squares, threat: threat };
     }
 
@@ -586,13 +703,13 @@
       var msg;
       if (ref.to === m.to) {
         var movedName = pieceName(m.promotion || m.piece);
-        msg = 'Your ' + movedName + ' on ' + m.to + " isn't safe there. " + opp + ' can take it with ' + ref.san + '.';
+        msg = 'Your ' + movedName + ' on ' + m.to + " isn't safe there. The bot can take it with its " + pieceName(ref.piece) + '.';
       } else {
-        msg = opp + ' can win your ' + capturedName + ' on ' + ref.to + ' with ' + ref.san + '.';
+        msg = 'The bot could take your ' + capturedName + ' on ' + ref.to + ' with its ' + pieceName(ref.piece) + '.';
         var wasGuard = attacksFrom(before.board, sqToIdx(m.from)).indexOf(sqToIdx(ref.to)) !== -1;
         if (wasGuard) msg += ' Your ' + pieceName(m.piece) + ' was protecting it before this move.';
       }
-      return { message: msg + ' That costs about ' + cost + '.', dangerSquares: [ref.to], threat: threat };
+      return { message: msg + ' That would be ' + cost + '.', dangerSquares: [ref.to], threat: threat };
     }
 
     // Fork: the reply attacks two or more valuable pieces at once.
@@ -612,21 +729,22 @@
         var names = hits.slice(0, 2).map(function (x) { return pieceName(x.p.t); });
         var squaresHit = [ref.to].concat(hits.slice(0, 2).map(function (x) { return idxToSq(x.i); }));
         return {
-          message: opp + ' has ' + ref.san + ', attacking your ' + names[0] + ' and ' + names[1] + ' at the same time. That fork costs about ' + cost + '.',
+          message: 'The bot could move its ' + pieceName(forker.t) + ' to ' + ref.to + ', attacking your ' + names[0] + ' and your ' + names[1] +
+            ' at the same time. This trick is called a "fork": you can only save one of them.',
           dangerSquares: squaresHit,
           threat: threat
         };
       }
     }
 
-    // A piece left hanging by this move.
+    // A piece left without protection by this move.
     var hangingNow = findHanging(after.board, me);
     var hangingBefore = findHanging(before.board, me).map(function (h) { return h.sq; });
     var newlyLoose = hangingNow.filter(function (h) { return hangingBefore.indexOf(h.sq) === -1 && h.sq !== m.to; });
     if (newlyLoose.length) {
       var h = newlyLoose[0];
       return {
-        message: 'Moving your ' + pieceName(m.piece) + ' leaves your ' + pieceName(h.t) + ' on ' + h.sq + ' unprotected. ' + opp + "'s best reply is " + ref.san + '.',
+        message: 'Moving your ' + pieceName(m.piece) + ' leaves your ' + pieceName(h.t) + ' on ' + h.sq + ' without protection. The bot\'s best answer would be to ' + botReply + '.',
         dangerSquares: [h.sq],
         threat: threat
       };
@@ -634,14 +752,14 @@
 
     if (typeof ctx.pAfter === 'number' && ctx.pAfter >= 200) {
       return {
-        message: "You're still doing well, but this throws away about " + cost + ' of your advantage. There is a much stronger move here.',
+        message: "You're still ahead, but this move throws away a lot of your lead. That's " + cost + '. There is a much better move.',
         dangerSquares: [ref.to],
         threat: threat
       };
     }
 
     return {
-      message: 'This gives ' + opp + ' a strong reply: ' + ref.san + '. It costs you about ' + cost + '.',
+      message: 'This lets the bot ' + botReply + '. That would be ' + cost + '.',
       dangerSquares: [ref.to],
       threat: threat
     };
@@ -868,6 +986,14 @@
     formatEval: formatEval,
     pawnsText: pawnsText,
     describeEval: describeEval,
+    shortScore: shortScore,
+    scoreChip: scoreChip,
+    lossLike: lossLike,
+    extraWords: extraWords,
+    lossGlyphs: lossGlyphs,
+    moveAction: moveAction,
+    moveTitle: moveTitle,
+    capitalize: capitalize,
     describeMove: describeMove,
     describeOpportunity: describeOpportunity,
     explainBlunder: explainBlunder,

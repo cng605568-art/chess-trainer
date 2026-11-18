@@ -24,12 +24,12 @@
   /* ======================================================================== */
 
   var LEVELS = [
-    { name: 'Rookie', glyph: '♟', blurb: 'Leaves pieces hanging often. Good for your very first games.', skill: 0, depth: 1, movetime: 80, random: 0.35 },
-    { name: 'Beginner', glyph: '♞', blurb: 'Makes sensible moves but misses simple tactics.', skill: 0, depth: 3, movetime: 150, random: 0.12 },
-    { name: 'Casual', glyph: '♝', blurb: 'Plays like a friendly club newcomer.', skill: 4, depth: 5, movetime: 300, random: 0 },
-    { name: 'Club player', glyph: '♜', blurb: 'Notices loose pieces and punishes them.', skill: 9, depth: 8, movetime: 500, random: 0 },
-    { name: 'Strong', glyph: '♛', blurb: 'A solid tournament player. Expect a real fight.', skill: 15, depth: 12, movetime: 800, random: 0 },
-    { name: 'Full Stockfish', glyph: '♚', blurb: 'Full strength. Mostly for watching how the engine plays.', skill: 20, depth: 18, movetime: 1500, random: 0 }
+    { name: 'Rookie', glyph: '♟', blurb: 'Makes lots of mistakes and often leaves pieces unprotected. Great for your very first games.', skill: 0, depth: 1, movetime: 80, random: 0.35 },
+    { name: 'Beginner', glyph: '♞', blurb: 'Plays sensible moves but misses simple tricks, like attacks on two pieces at once.', skill: 0, depth: 3, movetime: 150, random: 0.12 },
+    { name: 'Casual', glyph: '♝', blurb: 'Plays like someone who has been playing for a few months.', skill: 4, depth: 5, movetime: 300, random: 0 },
+    { name: 'Club player', glyph: '♜', blurb: 'Takes any piece you leave without protection.', skill: 9, depth: 8, movetime: 500, random: 0 },
+    { name: 'Strong', glyph: '♛', blurb: 'Plays like a strong tournament player. Expect a real fight.', skill: 15, depth: 12, movetime: 800, random: 0 },
+    { name: 'Full Stockfish', glyph: '♚', blurb: 'The computer at full strength. Almost impossible to beat, but fun to watch.', skill: 20, depth: 18, movetime: 1500, random: 0 }
   ];
 
   var ANALYSIS = { depth: 12, movetime: 900 };
@@ -170,9 +170,9 @@
     return moveToUci(pool[Math.floor(Math.random() * pool.length)]);
   }
 
-  function moveLabel(fenBefore, san) {
-    var p = C.parseFen(fenBefore);
-    return p.fullmove + (p.turn === 'w' ? '. ' : '… ') + san;
+  /** Feed label in words: "You: knight to f3", "Bot: bishop takes pawn on c4". */
+  function moveLabel(mv) {
+    return C.moveTitle(mv, mv.color === S.playerColor);
   }
 
   function sleep(ms) {
@@ -1191,8 +1191,8 @@
       var undoBtn = $('guardUndo');
       var playBtn = $('guardPlay');
       $('guardText').textContent = info.message;
-      $('guardEvalBefore').textContent = C.formatEval(info.evalBefore);
-      $('guardEvalAfter').textContent = C.formatEval(info.evalAfter);
+      $('guardEvalBefore').textContent = C.shortScore(info.evalBefore);
+      $('guardEvalAfter').textContent = C.shortScore(info.evalAfter);
       var prevFocus = document.activeElement;
       if (window.matchMedia('(max-width: 1023px)').matches) {
         ui.boardWrap.scrollIntoView({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
@@ -1539,11 +1539,11 @@
     if (s.reason) ui.enginePill.title = s.reason;
     if (s.state === 'fallback' && !S.engineNoticeShown) {
       S.engineNoticeShown = true;
-      S.engineNotice = { tone: 'warn', icon: '!', text: "Stockfish couldn't be downloaded, so a smaller backup engine is running. Coach Guard still works, just with less depth." };
+      S.engineNotice = { tone: 'warn', icon: '!', text: "The full computer coach couldn't load, so a simpler backup engine is running. It still warns you about mistakes, but it may miss a few." };
       pushNotes([S.engineNotice], 'Engine');
     }
     if (s.state === 'error') {
-      S.engineNotice = { tone: 'bad', icon: '✕', text: 'No chess engine could be started, so Coach Guard and move ratings are paused and the bot plays simple moves. Reload the page to try again.' };
+      S.engineNotice = { tone: 'bad', icon: '✕', text: "The computer coach couldn't start, so mistake warnings are off and the bot plays simple moves. Reload the page to try again." };
       pushNotes([S.engineNotice], 'Engine');
       if (S.phase === 'checking' || S.phase === 'player') refreshStatusForPhase();
     }
@@ -1601,17 +1601,17 @@
     if (!a || !a.hasScore) return;
     if (!isView) S.liveEval = a;
     var cp = a.whiteCp;
+    var mine = C.perspective(cp, S.playerColor);
     ui.evalFill.style.height = evalToPct(cp).toFixed(1) + '%';
-    var txt = C.formatEval(cp);
-    ui.evalChip.textContent = txt;
-    ui.evalBar.setAttribute('aria-label', 'Evaluation ' + txt + ' from White\'s side');
-    ui.statusSub.textContent = C.describeEval(C.perspective(cp, S.playerColor), oppName());
+    ui.evalChip.textContent = C.scoreChip(mine);
+    ui.evalBar.setAttribute('aria-label', C.shortScore(mine));
+    ui.statusSub.textContent = C.describeEval(mine);
   }
 
   function resetEval() {
     ui.evalFill.style.height = '50%';
-    ui.evalChip.textContent = '0.0';
-    ui.evalBar.setAttribute('aria-label', 'Evaluation: equal');
+    ui.evalChip.textContent = 'Even';
+    ui.evalBar.setAttribute('aria-label', 'Even');
   }
 
   function applyEvalVisibility() {
@@ -1620,6 +1620,7 @@
   }
 
   var QUALITY_MARKS = { blunder: '??', mistake: '?', inaccuracy: '?!' };
+  var QUALITY_NAMES = { blunder: 'Big mistake', mistake: 'Mistake', inaccuracy: 'Small slip' };
 
   function renderMoveList() {
     var hist = S.game.history({ verbose: true });
@@ -1658,7 +1659,7 @@
         if (mark) {
           btn.dataset.note = mark;
           btn.classList.add('q-' + q.cls);
-          btn.title = q.cls.charAt(0).toUpperCase() + q.cls.slice(1) + ': lost about ' + C.pawnsText(q.drop);
+          btn.title = QUALITY_NAMES[q.cls] + ': ' + C.lossLike(q.drop);
         }
         if (ply === current) {
           btn.classList.add('is-current');
@@ -1789,9 +1790,14 @@
     pushNotes([{
       tone: 'tip',
       icon: '♔',
-      text: "New game. You're playing " + C.COLOR_NAMES[S.playerColor] + ' against the ' + LEVELS[S.levelIndex].name + ' bot. ' +
-        (S.guardOn ? "Coach Guard is on, so I'll stop you before a big mistake." : 'Coach Guard is off, but blunders still go to your Blunder Bank.')
-    }], 'Start');
+      text: "New game! You're playing the " + (S.playerColor === 'w' ? 'white pieces, so you move first' : 'black pieces, so the bot moves first') +
+        '. Your opponent is the ' + LEVELS[S.levelIndex].name + ' bot. ' +
+        (S.guardOn ? "Coach Guard is on, so I'll stop you before a big mistake and explain why." : "Coach Guard is off, but your big mistakes are still saved in My Blunder Bank.")
+    }].concat(loadStats().games < 3 ? [{
+      tone: 'tip',
+      icon: '?',
+      text: 'Each square has a name made of a letter and a number, like e4. The letters run along the bottom edge of the board, the numbers up the side. The coach uses these names to point at squares.'
+    }] : []), 'Start');
     saveGame();
     if (S.game.turn() === S.playerColor) playerTurn(null);
     else botTurn();
@@ -1884,6 +1890,7 @@
       drop: drop,
       isBest: isBest,
       bestSan: bestSan,
+      best: before.bestMove ? describeUci(before.fen, before.bestMove) : null,
       bestMove: before.bestMove,
       isBlunder: !isBest && !!before.bestMove && drop > C.BLUNDER_CP
     };
@@ -1989,9 +1996,9 @@
           renderMoveList();
           renderStrips();
           var watch = explanation.threat
-            ? ' Before you move, look at what ' + oppName() + ' could do on ' + explanation.threat.to + '.'
+            ? ' Before you move again, look at what the bot could do on ' + explanation.threat.to + '.'
             : ' Look for a safer move.';
-          pushNotes([{ tone: 'good', icon: '↶', text: 'Good call taking it back.' + watch }], moveLabel(fenBefore, mv.san) + ', taken back');
+          pushNotes([{ tone: 'good', icon: '↶', text: 'Good call taking it back.' + watch }], moveLabel(mv) + ' (taken back)');
           playerTurn(null);
           return;
         }
@@ -2023,7 +2030,7 @@
       verdict: verdict,
       savedToBank: saved
     });
-    pushNotes(tips, moveLabel(fenBefore, mv.san));
+    pushNotes(tips, moveLabel(mv));
     if (after && after.hasScore) {
       showEval(after);
       S.lastPlayerEvalP = C.perspective(after.whiteCp, S.playerColor);
@@ -2047,7 +2054,7 @@
     var lvl = LEVELS[S.levelIndex];
     var botColor = oppColor();
     Clock.run(botColor);
-    setStatus(engine.ready || engine.failed ? lvl.name + ' bot is thinking…' : 'Waiting for the engine to load…', 'bot');
+    setStatus(engine.ready || engine.failed ? lvl.name + ' bot is thinking…' : 'Waiting for the computer to load…', 'bot');
     // Short on time, the bot moves faster, like a person would.
     var botLeft = Clock.countdown() ? Clock.value(botColor) : Infinity;
     var movetime = botLeft < 30000 ? Math.min(lvl.movetime, 150) : botLeft < 90000 ? Math.min(lvl.movetime, 400) : lvl.movetime;
@@ -2091,7 +2098,7 @@
     var hist = S.game.history({ verbose: true });
     var prevMove = hist.length >= 2 ? hist[hist.length - 2] : null;
     var term = terminalInfo(S.game);
-    var label = moveLabel(fenBefore, mv.san);
+    var label = moveLabel(mv);
     pushNotes(C.describeMove({
       move: mv,
       fenBefore: fenBefore,
@@ -2119,8 +2126,8 @@
       var won = S.game.turn() !== S.playerColor;
       return {
         result: won ? 'win' : 'loss',
-        status: won ? 'Checkmate. You win!' : 'Checkmate. ' + oppName() + ' wins.',
-        summary: won ? 'You won by checkmate!' : oppName() + ' won by checkmate.'
+        status: won ? 'Checkmate. You win!' : 'Checkmate. The bot wins.',
+        summary: won ? 'You won by checkmate!' : 'The bot won by checkmate.'
       };
     }
     if (term === 'timeout') {
@@ -2137,17 +2144,17 @@
       }
       return {
         result: playerFlagged ? 'loss' : 'win',
-        status: playerFlagged ? 'You ran out of time. ' + oppName() + ' wins.' : 'The bot ran out of time. You win!',
-        summary: playerFlagged ? oppName() + ' won on time.' : 'You won on time!'
+        status: playerFlagged ? 'You ran out of time. The bot wins.' : 'The bot ran out of time. You win!',
+        summary: playerFlagged ? 'The bot won on time.' : 'You won on time!'
       };
     }
     var reason = {
-      stalemate: ['Stalemate.', 'stalemate'],
-      repetition: ['Threefold repetition.', 'repetition'],
-      insufficient: ['Not enough material to checkmate.', 'insufficient material'],
-      fifty: ['50-move rule.', 'the 50-move rule']
-    }[term] || ['', 'agreement'];
-    return { result: 'draw', status: ('Draw. ' + reason[0]).trim(), summary: 'Draw by ' + reason[1] + '.' };
+      stalemate: ["Draw by stalemate: no legal move, but the king isn't attacked.", 'Draw by stalemate.'],
+      repetition: ['Draw: the same position came up three times.', 'Draw: the same position came up three times.'],
+      insufficient: ['Draw: not enough pieces left to checkmate.', 'Draw: not enough pieces left to checkmate.'],
+      fifty: ['Draw: 50 moves with no capture and no pawn move.', 'Draw by the 50-move rule.']
+    }[term] || ['Draw.', 'Draw.'];
+    return { result: 'draw', status: reason[0], summary: reason[1] };
   }
 
   function endGame(term) {
@@ -2161,8 +2168,8 @@
     Sound.play(outcome.result === 'win' ? 'win' : outcome.result === 'loss' ? 'lose' : 'draw');
     recordGame(term, outcome.result);
     var summary = S.bankedThisGame > 0
-      ? 'This game added ' + S.bankedThisGame + (S.bankedThisGame === 1 ? ' blunder' : ' blunders') + ' to My Blunder Bank. Solving them is the fastest way to stop repeating them.'
-      : 'No new blunders saved this game. Nicely done.';
+      ? 'This game added ' + S.bankedThisGame + (S.bankedThisGame === 1 ? ' big mistake' : ' big mistakes') + ' to My Blunder Bank as puzzles. Solving them is the best way to stop making the same mistake again.'
+      : 'No big mistakes this game. Nicely done!';
     pushNotes([{ tone: 'tip', icon: '♔', text: summary }], 'Game over');
     showSummary(term);
   }
@@ -2210,7 +2217,7 @@
     }
     refreshControls();
     if (!a || !a.bestMove) {
-      pushNotes([{ tone: 'tip', icon: '?', text: 'The engine is still warming up. Try the hint again in a moment.' }], 'Hint');
+      pushNotes([{ tone: 'tip', icon: '?', text: 'The computer coach is still loading. Try the hint again in a moment.' }], 'Hint');
       return;
     }
     var mv = uciToMove(a.bestMove);
@@ -2220,12 +2227,13 @@
     if (S.hintStage === 0) {
       S.hintStage = 1;
       board.setMarks({ hint: [mv.from] });
-      pushNotes([{ tone: 'tip', icon: '?', text: 'Hint: look at your ' + pieceName + ' on ' + mv.from + '. Press Show hint again to see the full move.' }], 'Hint');
+      pushNotes([{ tone: 'tip', icon: '?', text: 'Hint: look at your ' + pieceName + ' on ' + mv.from + ' (the highlighted square). Press Show hint again to see the whole move.' }], 'Hint');
     } else {
       S.hintStage = 2;
       board.setMarks({ hint: [mv.from] });
       board.setArrows([{ from: mv.from, to: mv.to, color: 'green' }]);
-      pushNotes([{ tone: 'tip', icon: '?', text: 'Stockfish suggests ' + sanOf(fen, a.bestMove) + '.' }], 'Hint');
+      var bestMv = describeUci(fen, a.bestMove);
+      pushNotes([{ tone: 'tip', icon: '?', text: 'The best move here: ' + (bestMv ? C.moveAction(bestMv, true) : sanOf(fen, a.bestMove)) + '. Follow the green arrow.' }], 'Hint');
     }
   }
 
@@ -2327,17 +2335,17 @@
     });
     var lines = [];
     if (rated) {
-      lines.push('You kept the position steady on ' + (counts.best + counts.good) + ' of ' + rated + (rated === 1 ? ' rated move.' : ' rated moves.'));
+      lines.push((counts.best + counts.good) + ' of your ' + rated + (rated === 1 ? ' move was' : ' moves were') + ' good or best.');
     } else {
-      lines.push('No move ratings for this game. The engine was unavailable, or the game was resumed after a reload.');
+      lines.push("This game has no move ratings, because the computer coach wasn't running or the page was reloaded during the game.");
     }
     if (S.review.saves) lines.push('Coach Guard saved you ' + S.review.saves + (S.review.saves === 1 ? ' time.' : ' times.'));
     ui.summaryLine.textContent = lines.join(' ');
     drawEvalGraph(hist.length);
     ui.btnSummaryBank.hidden = S.bankedThisGame === 0;
-    ui.btnSummaryBank.textContent = S.bankedThisGame === 1 ? 'Practice this blunder' : 'Practice these ' + S.bankedThisGame + ' blunders';
+    ui.btnSummaryBank.textContent = S.bankedThisGame === 1 ? 'Practice this mistake' : 'Practice these ' + S.bankedThisGame + ' mistakes';
     S.summaryStartPly = firstBlunder ? firstBlunder - 1 : 0;
-    ui.btnSummaryReview.textContent = firstBlunder ? 'Replay from your first blunder' : 'Replay the game';
+    ui.btnSummaryReview.textContent = firstBlunder ? 'Replay from your first big mistake' : 'Replay the game';
     ui.summaryPanel.hidden = false;
   }
 
@@ -2358,7 +2366,7 @@
       '<clipPath id="egBottom"><rect x="0" y="' + mid + '" width="' + W + '" height="' + mid + '"/></clipPath></defs>' +
       '<line class="eg-mid" x1="0" y1="' + mid + '" x2="' + W + '" y2="' + mid + '"/>';
     if (pts.length < 2) {
-      svg += '<text class="eg-empty" x="' + (W / 2) + '" y="' + (mid - 8) + '" text-anchor="middle">Not enough engine data for a graph yet</text>';
+      svg += '<text class="eg-empty" x="' + (W / 2) + '" y="' + (mid - 8) + '" text-anchor="middle">Not enough moves for a graph yet</text>';
       ui.evalGraph.innerHTML = svg;
       return;
     }
@@ -2592,7 +2600,7 @@
       $('btnClearBank').hidden = list.length === 0;
       $('bankStats').textContent = list.length
         ? list.length + (list.length === 1 ? ' puzzle waiting' : ' puzzles waiting') + (stats.cleared ? ', ' + stats.cleared + ' cleared so far.' : '.')
-        : (stats.cleared ? 'All clear. You have solved ' + stats.cleared + (stats.cleared === 1 ? ' blunder' : ' blunders') + '.' : '');
+        : (stats.cleared ? 'All clear. You have solved ' + stats.cleared + (stats.cleared === 1 ? ' puzzle' : ' puzzles') + '.' : '');
       var self = this;
       list.forEach(function (e) {
         var li = document.createElement('li');
@@ -2608,11 +2616,13 @@
         top.className = 'bank-item-top';
         var san = document.createElement('span');
         san.className = 'bank-item-san';
-        san.textContent = 'You played ' + e.playedSan;
+        var played = describeUci(e.fen, e.playedMove);
+        san.textContent = played ? C.moveTitle(played, true) : 'You played ' + e.playedSan;
         var drop = document.createElement('span');
         drop.className = 'drop-pill';
-        drop.textContent = '−' + (Math.abs(e.drop) / 100).toFixed(1);
-        drop.title = 'Lost about ' + C.pawnsText(e.drop);
+        drop.textContent = C.lossGlyphs(e.drop);
+        drop.title = C.capitalize(C.lossLike(e.drop));
+        drop.setAttribute('aria-label', C.capitalize(C.lossLike(e.drop)));
         top.appendChild(san);
         top.appendChild(drop);
         var sub = document.createElement('span');
@@ -2631,7 +2641,7 @@
         if (e.timesBlundered > 1) {
           var t2 = document.createElement('span');
           t2.className = 'bank-tag tag-repeat';
-          t2.textContent = 'Repeated ' + e.timesBlundered + ' times';
+          t2.textContent = 'Made this mistake ' + e.timesBlundered + ' times';
           tags.appendChild(t2);
         }
         if (e.attempts > 0) {
@@ -2657,9 +2667,9 @@
       $('puzzleIntro').hidden = false;
       var n = C.BlunderBank.count();
       $('puzzleIntroText').textContent = n
-        ? 'Pick a blunder from the list to replay that position and find the move you missed.'
-        : 'Your bank is empty. Blunders from your Practice games will show up here.';
-      $('btnStartBank').textContent = n ? 'Start with the newest' : 'Go to Practice';
+        ? "Pick a mistake from the list. You'll see the board just before it happened, so you can look for a better move."
+        : 'Nothing here yet. When you make a big mistake in a game, it shows up here as a puzzle.';
+      $('btnStartBank').textContent = n ? 'Start with the newest' : 'Play a game';
       this.renderList();
     },
 
@@ -2690,12 +2700,19 @@
       this.board.setArrows([]);
       $('puzzleIntro').hidden = true;
       $('puzzleArea').hidden = false;
-      var opp = C.COLOR_NAMES[C.opposite(e.color)];
-      $('puzzleTitle').textContent = 'Find a better move for ' + C.COLOR_NAMES[e.color];
-      $('puzzleText').textContent = 'In your game you played ' + e.playedSan +
-        (e.refutationSan ? ', and ' + opp + ' could answer ' + e.refutationSan + '.' : '.') +
-        ' What should you play instead?';
-      this.feedback('Your move. Take your time and check what each move allows.', 'neutral');
+      $('puzzleTitle').textContent = 'Find a better move (you are ' + C.COLOR_NAMES[e.color] + ')';
+      var playedMv = describeUci(e.fen, e.playedMove);
+      var replyMv = null;
+      if (playedMv && e.refutationSan) {
+        var afterGame = new window.Chess(e.fen);
+        safeMove(afterGame, uciToMove(e.playedMove));
+        replyMv = safeMove(afterGame, e.refutationSan);
+      }
+      $('puzzleText').textContent = playedMv
+        ? 'In your game you chose to ' + C.moveAction(playedMv, true) + '.' +
+          (replyMv ? ' Then the bot could ' + C.moveAction(replyMv, false) + '.' : '') + ' What should you play instead?'
+        : 'In your game you played ' + e.playedSan + '. What should you play instead?';
+      this.feedback('Your turn. Before you move, ask yourself: what can the bot do after this?', 'neutral');
       this.setButtons();
       this.renderList();
     },
@@ -2747,7 +2764,7 @@
       }
       this.phase = 'checking';
       this.setButtons();
-      this.feedback('Checking ' + mv.san + '…', 'busy');
+      this.feedback('Checking your move…', 'busy');
       var a = await analyze(this.game.fen(), PUZZLE_ANALYSIS);
       if (epoch !== this.epoch) return;
       var before = C.clampCp(e.evalBefore);
@@ -2759,10 +2776,10 @@
         }
         var lost = before - p;
         this.feedback(lost >= 50
-          ? 'Not quite. After ' + mv.san + " you'd be about " + C.pawnsText(lost) + ' worse off than with the best move. Try again.'
-          : mv.san + ' is close to the move you played in the game. Look for something stronger.', 'bad');
+          ? 'Not quite. Compared with the best move, that is ' + C.lossLike(lost) + '. Try again.'
+          : "That's about as good as the move you played in the game. Look for something stronger.", 'bad');
       } else {
-        this.feedback(mv.san + " isn't the move we're looking for. Try again.", 'bad');
+        this.feedback("That's not the move we're looking for. Try again.", 'bad');
       }
       Sound.play('wrong');
       C.BlunderBank.recordAttempt(e.id, false);
@@ -2787,8 +2804,8 @@
       Sound.play('correct');
       C.BlunderBank.recordAttempt(e.id, true);
       this.feedback(alternative
-        ? mv.san + ' works too! Stockfish preferred ' + e.bestSan + '. This one is cleared from your bank.'
-        : 'Solved! ' + mv.san + ' was the move. This one is cleared from your bank.', 'good');
+        ? 'That works too! The computer liked one other move even more: to ' + bestWords(e) + '. This puzzle is cleared from your bank.'
+        : "Solved! That's the move. This puzzle is cleared from your bank.", 'good');
       this.setButtons();
       this.renderList();
     },
@@ -2800,7 +2817,7 @@
       this.hintShown = true;
       Sound.play('hint');
       this.board.setMarks({ hint: [best.from] });
-      this.feedback('Hint: the move starts with your ' + (p ? C.NAMES[p.type] : 'piece') + ' on ' + best.from + '.', 'neutral');
+      this.feedback('Hint: move your ' + (p ? C.NAMES[p.type] : 'piece') + ' on ' + best.from + ' (the highlighted square).', 'neutral');
       this.setButtons();
     },
 
@@ -2818,7 +2835,7 @@
       this.phase = 'revealed';
       C.BlunderBank.recordAttempt(e.id, false);
       this.entry = C.BlunderBank.get(e.id) || e;
-      this.feedback("Stockfish's move was " + e.bestSan + '. This puzzle stays in your bank so you can try it again later.', 'neutral');
+      this.feedback('The best move was to ' + bestWords(e) + '. Follow the green arrow. This puzzle stays in your bank so you can try it again later.', 'neutral');
       this.setButtons();
     },
 
@@ -2841,6 +2858,12 @@
       this.next();
     }
   };
+
+  /** The best move of a saved puzzle, in words. */
+  function bestWords(e) {
+    var mv = describeUci(e.fen, e.bestMove);
+    return mv ? C.moveAction(mv, true) : 'play ' + e.bestSan;
+  }
 
   function relativeDay(ts) {
     var d = new Date(ts);
@@ -2982,7 +3005,7 @@
       title.textContent = 'vs ' + lvl.name + ' bot';
       var sub = document.createElement('span');
       sub.className = 'history-sub';
-      var how = { checkmate: 'Checkmate', timeout: 'On time', stalemate: 'Stalemate', repetition: 'Repetition', insufficient: 'Dead position', fifty: '50-move rule' }[g.how] || 'Finished';
+      var how = { checkmate: 'Checkmate', timeout: 'On time', stalemate: 'Stalemate', repetition: 'Repetition', insufficient: 'Not enough pieces', fifty: '50-move rule' }[g.how] || 'Finished';
       sub.textContent = how + ', ' + g.moves + (g.moves === 1 ? ' move' : ' moves') + ' as ' + (g.color === 'b' ? 'Black' : 'White') + ', ' + relativeDay(g.at);
       text.appendChild(title);
       text.appendChild(sub);
@@ -3144,8 +3167,8 @@
         tone: 'tip',
         icon: S.guardOn ? '✓' : '•',
         text: S.guardOn
-          ? "Coach Guard is on. I'll pause you before any move that loses more than 1.5 pawns."
-          : 'Coach Guard is off. You play freely, and blunders still go to My Blunder Bank.'
+          ? "Coach Guard is on. I'll stop you before a big mistake and explain what's wrong."
+          : 'Coach Guard is off. You play freely, and your big mistakes are still saved in My Blunder Bank.'
       }], 'Settings');
     });
 

@@ -285,9 +285,9 @@
               <span class="status-dot" id="statusDot" data-kind="busy" aria-hidden="true"></span>
               <div class="status-copy">
                 <p class="status-text font-display" id="statusText" role="status" aria-live="polite">Setting up the board…</p>
-                <p class="status-sub" id="statusSub">The engine is loading. This takes a few seconds the first time.</p>
+                <p class="status-sub" id="statusSub">The computer coach is loading. This takes a few seconds the first time.</p>
               </div>
-              <span class="eval-chip" id="evalChip" title="Engine evaluation from White's side">0.0</span>
+              <span class="eval-chip" id="evalChip" title="Who's ahead, counted in pawns. A knight or bishop is worth about 3 pawns, a rook 5, a queen 9.">Even</span>
             </div>
 
             <div class="controls" role="toolbar" aria-label="Game controls">
@@ -302,18 +302,18 @@
               <p class="summary-result font-display" id="summaryResult"></p>
               <figure class="evalgraph">
                 <svg id="evalGraph" viewBox="0 0 300 96" role="img" aria-label="How the evaluation changed during the game, from your side. Click to replay that moment."></svg>
-                <figcaption class="evalgraph-caption"><span>Above the line, you were better</span><span>Click the graph to replay</span></figcaption>
+                <figcaption class="evalgraph-caption"><span>Above the middle line, you were ahead</span><span>Tap the graph to see that moment</span></figcaption>
               </figure>
               <ul class="quality-grid" aria-label="How your moves were rated">
-                <li class="q-best"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Best</span><span class="q-count" data-q="best">0</span></li>
-                <li class="q-good"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Good</span><span class="q-count" data-q="good">0</span></li>
-                <li class="q-inaccuracy"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Inaccuracies</span><span class="q-count" data-q="inaccuracy">0</span></li>
+                <li class="q-best"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Best moves</span><span class="q-count" data-q="best">0</span></li>
+                <li class="q-good"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Good moves</span><span class="q-count" data-q="good">0</span></li>
+                <li class="q-inaccuracy"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Small slips</span><span class="q-count" data-q="inaccuracy">0</span></li>
                 <li class="q-mistake"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Mistakes</span><span class="q-count" data-q="mistake">0</span></li>
-                <li class="q-blunder"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Blunders</span><span class="q-count" data-q="blunder">0</span></li>
+                <li class="q-blunder"><span class="q-dot" aria-hidden="true"></span><span class="q-label">Big mistakes</span><span class="q-count" data-q="blunder">0</span></li>
               </ul>
               <p class="summary-line" id="summaryLine"></p>
               <div class="summary-actions">
-                <button type="button" class="btn btn-primary" id="btnSummaryBank">Practice these blunders</button>
+                <button type="button" class="btn btn-primary" id="btnSummaryBank">Practice these mistakes</button>
                 <button type="button" class="btn btn-ghost" id="btnSummaryReview">Replay the game</button>
               </div>
             </section>
@@ -327,7 +327,7 @@
 
             <section class="block" aria-labelledby="movesHeading">
               <h2 class="block-title font-display" id="movesHeading">Moves</h2>
-              <p class="block-help">Pick a move, or use the step buttons or the ← → keys, to look back through the game.</p>
+              <p class="block-help">Moves are written in chess shorthand: K king, Q queen, R rook, B bishop, N knight, no letter for a pawn, x means takes, + means check. Tap a move to see the board at that moment.</p>
               <ol class="movelist" id="moveList"></ol>
             </section>
           </div>
@@ -362,14 +362,14 @@
               <div class="setting">
                 <div class="setting-text">
                   <span class="setting-name" id="guardLabel">Coach Guard</span>
-                  <span class="setting-help" id="guardHelp">Checks each move with Stockfish and pauses you if it would drop more than 1.5 pawns.</span>
+                  <span class="setting-help" id="guardHelp">Stops you before a big mistake, like leaving a piece where the bot can take it for free, and explains why.</span>
                 </div>
                 <button type="button" class="switch" id="guardToggle" role="switch" aria-checked="true" aria-labelledby="guardLabel" aria-describedby="guardHelp"><span class="switch-knob"></span></button>
               </div>
               <div class="setting">
                 <div class="setting-text">
-                  <span class="setting-name" id="evalLabelName">Evaluation bar</span>
-                  <span class="setting-help">Shows who is ahead, from White's side.</span>
+                  <span class="setting-name" id="evalLabelName">Who's ahead</span>
+                  <span class="setting-help">Shows who is winning: a bar beside the board (the more white, the better White is doing) and a score next to the coach's message.</span>
                 </div>
                 <button type="button" class="switch" id="evalToggle" role="switch" aria-checked="true" aria-labelledby="evalLabelName"><span class="switch-knob"></span></button>
               </div>
@@ -425,7 +425,7 @@
           </header>
 
           <div class="side-body">
-            <p class="bank-intro">Every blunder you make in Play lands here as a puzzle. Find the better move to clear it for good.</p>
+            <p class="bank-intro">Every big mistake you make in a game (chess players call it a "blunder") is saved here as a puzzle. Find a better move to clear it.</p>
             <p class="bank-stats" id="bankStats"></p>
 
             <div class="puzzle-intro" id="puzzleIntro">
@@ -451,7 +451,7 @@
             <ul class="bank-list" id="bankList"></ul>
             <div class="bank-empty" id="bankEmpty" hidden>
               <p class="font-display bank-empty-title">Nothing to fix yet</p>
-              <p>Play a game. When Stockfish spots a blunder, the position is saved here so you can solve it later.</p>
+              <p>Play a game. When you make a big mistake, the board from just before it is saved here so you can try again.</p>
               <button type="button" class="btn btn-primary" data-goto="play">Go to Play</button>
             </div>
             <button type="button" class="btn btn-quiet" id="btnClearBank">Remove all saved blunders</button>
@@ -500,7 +500,7 @@
       <h2 class="guard-title font-display" id="guardTitle">Hold on. Take a second look.</h2>
     </div>
     <p class="guard-eval">
-      <span class="guard-eval-label">Your position</span>
+      <span class="guard-eval-label">Who's ahead</span>
       <span class="guard-eval-before" id="guardEvalBefore">+0.0</span>
       <span class="guard-eval-arrow" aria-label="would become">→</span>
       <span class="guard-eval-after" id="guardEvalAfter">−0.0</span>

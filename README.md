@@ -52,7 +52,7 @@ A sidebar on the left switches between **Home**, **Play**, **Blunder Bank** and 
 
 **Coach Guard.** While you think, Stockfish evaluates the position. When you move, it evaluates the new position too. If your move drops the evaluation by more than 1.5 pawns (scores are capped at ±10 so mates and huge leads don't trigger false alarms), the move pauses, the threatened square pulses red, and you choose **Undo & Rethink** or **Play Anyway**. Turn the guard off in the Settings tab of the right panel to play freely.
 
-**Coach notes.** After each move, deterministic rules in `coach.js` describe what happened in beginner language: captures, checks, castling, central pawns, development, early queen moves, loose pieces, and when the bot slips up.
+**Coach notes.** After each move, deterministic rules in `coach.js` describe what happened in beginner language: captures, checks, castling, central pawns, development, early queen moves, loose pieces, and when the bot slips up. Everything is written for complete beginners: moves are described in words ("move your knight from g1 to f3") instead of chess notation, gains and losses are measured in pieces ("like giving away a knight") instead of engine numbers, and chess words like check, fork, castling and stalemate are explained where they come up. The opponent is always called "the bot".
 
 **My Blunder Bank.** Every blunder is saved (position + Stockfish's best move), whether the guard caught it or not. In the Blunder Bank tab you replay the position and look for a better move. Stockfish's move, or any move that keeps the position within 0.6 pawns of it, solves the puzzle and clears it from the queue.
 

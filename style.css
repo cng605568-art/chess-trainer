@@ -1107,6 +1107,7 @@ body.hide-eval .eval-chip {
   font-weight: 700;
   font-size: 0.9rem;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* Menu cards (bot levels) */
@@ -1791,6 +1792,7 @@ button.move-san:hover {
   font-weight: 700;
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .bank-item-sub {
