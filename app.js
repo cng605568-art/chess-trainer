@@ -4643,16 +4643,106 @@
         this.board.setMarks({ lastMove: null, check: null, danger: [], hint: [], stars: this.stars });
       } else {
         this.map = null;
-        this.game = new window.Chess(st.fen);
-        this.color = this.game.turn();
+        this.game = new window.Chess(st.fen || START_FEN);
+        this.color = st.type === 'line' ? (st.side || 'w') : this.game.turn();
         this.board.setOrientation(this.color);
-        this.board.setFen(st.fen);
+        this.board.setFen(this.game.fen());
         this.board.setMarks({ lastMove: null, check: checkSquare(this.game), danger: [], hint: [], stars: [] });
       }
       this.phase = 'doing';
+      if (st.type === 'line') {
+        this.lineIdx = 0;
+        this.lineMisses = 0;
+        this.renderDots();
+        this.setButtons();
+        if (this.game.turn() !== this.color) this.lineReply('');
+        else this.status(this.lineTask(), T(st.text), '', 'you');
+        return;
+      }
       this.status(st.text, st.type === 'play' && st.tip ? T('Tip: {tip}', { tip: T(st.tip) }) : '', '', 'you');
       this.renderDots();
       this.setButtons();
+    },
+
+    /* ---------------------------------------------------- openings, move by move */
+
+    /** What to play next: the move in words, or a from-memory prompt. */
+    lineTask: function () {
+      var st = this.step;
+      var m = st.moves[this.lineIdx];
+      if (!m) return T(st.text);
+      var n = Math.floor(this.lineIdx / 2) + 1;
+      return st.recall ? T('Move {n}: play the next move of this opening from memory.', { n: n }) : T(m.say);
+    },
+
+    /** The bot plays its book move, then it is your turn again. */
+    lineReply: function (feedback) {
+      var self = this;
+      var epoch = this.epoch;
+      this.phase = 'thinking';
+      this.setButtons();
+      this.status(this.lineTask(), feedback, feedback ? 'good' : '', 'bot');
+      this.timer = setTimeout(function () {
+        if (epoch !== self.epoch) return;
+        var m = self.step.moves[self.lineIdx];
+        var mv = m ? safeMove(self.game, m.san) : null;
+        if (mv) {
+          self.lineIdx++;
+          self.board.setFen(self.game.fen(), { animate: true });
+          self.board.setMarks({ lastMove: { from: mv.from, to: mv.to }, check: checkSquare(self.game), hint: [] });
+          playMoveSound(mv, self.game, true);
+        }
+        self.phase = 'doing';
+        self.setButtons();
+        if (self.lineIdx >= self.step.moves.length) {
+          self.stepDone(C.joinSentences([m ? T(m.why) : '', T(self.step.done || 'Well done!')]));
+          return;
+        }
+        self.status(self.lineTask(), m ? C.joinSentences([T('The bot plays {move}.', { move: mv ? mv.san : m.san }), T(m.why)]) : '', '', 'you');
+      }, feedback ? 900 : 500);
+    },
+
+    /** Your move in an opening line: the book move, or try again. */
+    lineMove: function (mv) {
+      var self = this;
+      var epoch = this.epoch;
+      var st = this.step;
+      var m = st.moves[this.lineIdx];
+      var expected = null;
+      // The position before your move: replay the line so far.
+      var before = new window.Chess(st.fen || START_FEN);
+      for (var i = 0; i < this.lineIdx; i++) safeMove(before, st.moves[i].san);
+      var exp = m ? safeMove(before, m.san) : null;
+      expected = exp ? moveToUci(exp) : null;
+      if (expected && moveToUci(mv) === expected) {
+        this.lineIdx++;
+        if (this.lineIdx >= st.moves.length) {
+          this.stepDone(C.joinSentences([T(m.why), T(st.done || 'Well done!')]));
+          return;
+        }
+        this.lineReply(T(m.why));
+        return;
+      }
+      this.lineMisses++;
+      this.phase = 'wrong';
+      Sound.play('wrong');
+      var msg = st.recall
+        ? (this.lineMisses >= 2 ? T('Not this one. The green arrow shows the move from the opening.') : T("That's not the move from this opening. Try again."))
+        : T('Not that one. Follow the instruction above.');
+      this.status(this.lineTask(), msg, 'bad', 'warn');
+      this.setButtons();
+      this.timer = setTimeout(function () {
+        if (epoch !== self.epoch) return;
+        self.game.undo();
+        self.board.setFen(self.game.fen(), { animate: true });
+        var hist = self.game.history({ verbose: true });
+        var last = hist[hist.length - 1];
+        self.board.setMarks({ lastMove: last ? { from: last.from, to: last.to } : null, check: checkSquare(self.game), hint: [] });
+        if (exp && (self.lineMisses >= 2 || !st.recall)) self.board.setArrows([{ from: exp.from, to: exp.to, color: 'green' }]);
+        self.phase = 'doing';
+        self.status(self.lineTask(), msg, '', 'you');
+        self.setButtons();
+      }, 1200);
     },
 
     onMove: async function (from, to) {
@@ -4708,6 +4798,12 @@
         case 'castle': return /[kq]/.test(mv.flags || '');
         case 'promote': return mv.promotion === 'q';
         case 'moves': return (st.moves || []).indexOf(moveToUci(mv)) !== -1;
+        case 'nomate':
+          return !g.moves({ verbose: true }).some(function (m) {
+            var h = new window.Chess(g.fen());
+            safeMove(h, { from: m.from, to: m.to, promotion: m.promotion });
+            return ChessAPI.isCheckmate(h);
+          });
         default: return false;
       }
     },
@@ -4738,7 +4834,15 @@
       this.board.setArrows([]);
       playMoveSound(mv, this.game, false);
 
+      if (st.type === 'line') {
+        this.lineMove(mv);
+        return;
+      }
       if (st.type === 'play') {
+        if (st.goal === 'promote' && mv.promotion) {
+          this.stepDone(T(st.done || 'Well done!'));
+          return;
+        }
         this.playReply(mv);
         return;
       }
@@ -4819,7 +4923,7 @@
       var g = this.game;
       var reason = null;
       if (ChessAPI.isStalemate(g)) reason = T("Stalemate! The bot's king had no legal move but was not in check, so it's a draw. Keep your queen or rook a little further away and try again.");
-      else if (ChessAPI.isInsufficient && ChessAPI.isInsufficient(g)) reason = T('The bot took your piece, so nobody can checkmate any more. Try again, and keep your piece away from the king.');
+      else if (ChessAPI.isInsufficient && ChessAPI.isInsufficient(g)) reason = T(this.step.wrong || 'The bot took your piece, so nobody can checkmate any more. Try again, and keep your piece away from the king.');
       else if (this.moves >= 50) reason = T('That took 50 moves, so the game would be a draw. Try again: shrink the box faster.');
       if (!reason) return false;
       this.phase = 'wrong';
@@ -4877,6 +4981,15 @@
         } else {
           this.board.setMarks({ hint: [this.hero] });
           this.status(st.text, T('No target can be reached in one move from here. Move somewhere that lines up with one first.'), '', 'you');
+        }
+        return;
+      }
+      if (st.type === 'line') {
+        var m = st.moves[this.lineIdx];
+        var mv = m ? safeMove(new window.Chess(this.game.fen()), m.san) : null;
+        if (mv) {
+          this.board.setArrows([{ from: mv.from, to: mv.to, color: 'green' }]);
+          this.status(this.lineTask(), T('Follow the green arrow.'), '', 'you');
         }
         return;
       }

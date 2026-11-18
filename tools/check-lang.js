@@ -111,7 +111,10 @@ tableProps(app, 'PUZZLE_THEMES', ['name', 'title', 'help'], 'app-tables');
     u.lessons.forEach((l) => {
       add('lessons', l.title);
       add('lessons', l.intro);
-      l.steps.forEach((s) => ['text', 'tip', 'done', 'wrong'].forEach((k) => s[k] && add('lessons', s[k])));
+      l.steps.forEach((s) => {
+        ['text', 'tip', 'done', 'wrong'].forEach((k) => s[k] && add('lessons', s[k]));
+        if (s.type === 'line') s.moves.forEach((m) => { if (m.say) add('lessons', m.say); if (m.why) add('lessons', m.why); });
+      });
     });
   });
 }
