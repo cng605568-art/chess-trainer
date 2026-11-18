@@ -990,5 +990,11 @@ I18N.addRows([
   ["Normal chess with one extra way to win: put the other king in check three times. Checkmate still wins too.", "Catur biasa dengan satu lagi cara untuk menang: beri sah kepada raja lawan sebanyak tiga kali. Sah mati tetap menang juga.", "普通国际象棋，再加一种赢法：将对方的王三次。将死也照样能赢。"],
   ["The red square on the board shows the danger.", "Petak merah pada papan menunjukkan bahaya.", "棋盘上的红色格子表示危险。"],
   ["Many ways to play", "Banyak cara bermain", "多种玩法"],
-  ["Bullet, Blitz and Rapid clocks, King of the Hill, Three-check, a head start against the bot, games with a friend on one device, and Puzzle Sprint and Survival.", "Jam Bullet, Blitz dan Rapid, Raja di Bukit, Tiga Sah, kelebihan awal melawan bot, permainan dengan rakan pada satu peranti, serta Pecutan Teka-teki dan Teka-teki Bertahan.", "子弹棋、闪电棋和快棋计时，山丘之王，三次将军，让子棋，和朋友在一台设备上对弈，还有谜题冲刺和谜题生存。"]
+  ["Bullet, Blitz and Rapid clocks, King of the Hill, Three-check, a head start against the bot, games with a friend on one device, and Puzzle Sprint and Survival.", "Jam Bullet, Blitz dan Rapid, Raja di Bukit, Tiga Sah, kelebihan awal melawan bot, permainan dengan rakan pada satu peranti, serta Pecutan Teka-teki dan Teka-teki Bertahan.", "子弹棋、闪电棋和快棋计时，山丘之王，三次将军，让子棋，和朋友在一台设备上对弈，还有谜题冲刺和谜题生存。"],
+  ["Visits are counted anonymously with Vercel Web Analytics. It uses no cookies and stores nothing about you.", "Lawatan dikira tanpa nama dengan Vercel Web Analytics. Ia tidak menggunakan kuki dan tidak menyimpan apa-apa tentang anda.", "访问量通过 Vercel Web Analytics 匿名统计。它不使用 Cookie，也不保存任何关于你的信息。"],
+  ["This browser can't read text out loud.", "Pelayar ini tidak boleh membaca teks dengan kuat.", "这个浏览器不能朗读文字。"],
+  ["Your device has no voice for this language, so another voice may read it, or it may stay silent. You can add voices in your phone's settings.", "Peranti anda tiada suara untuk bahasa ini, jadi suara lain mungkin membacanya, atau ia mungkin senyap. Anda boleh menambah suara dalam tetapan telefon anda.", "你的设备没有这种语言的语音，可能会用别的语音朗读，也可能没有声音。你可以在手机设置里添加语音。"],
+  ["The coach's notes, warnings and lesson steps are read out loud with your device's voice.", "Nota, amaran dan langkah pelajaran jurulatih dibaca dengan kuat menggunakan suara peranti anda.", "用你设备的语音朗读教练的点评、提醒和课程步骤。"],
+  ["I'll read my notes out loud.", "Saya akan membaca nota saya dengan kuat.", "我会把点评读出来。"],
+  ["Read the coach aloud", "Jurulatih membaca dengan kuat", "朗读教练点评"]
 ]);

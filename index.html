@@ -105,6 +105,10 @@
     }
   </script>
   <link rel="stylesheet" href="./style.css">
+  <script>
+    window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+  </script>
+  <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body class="font-sans antialiased" data-board="green">
   <a href="#board" class="skip-link">Skip to the board</a>
@@ -443,7 +447,10 @@
             </section>
 
             <section class="block" aria-labelledby="notesHeading">
-              <h2 class="block-title font-display" id="notesHeading">Coach notes</h2>
+              <div class="block-head">
+                <h2 class="block-title font-display" id="notesHeading">Coach notes</h2>
+                <button type="button" class="voice-btn" data-voice-toggle aria-pressed="false" aria-label="Read the coach aloud" title="Read the coach aloud"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg></button>
+              </div>
               <ol class="feed" id="feed" aria-live="polite" aria-relevant="additions">
                 <li class="feed-empty">Pick a bot to start. Your coach's notes on every move show up here.</li>
               </ol>
@@ -558,6 +565,13 @@
                 </div>
                 <button type="button" class="switch" id="soundToggle" role="switch" aria-checked="true" aria-labelledby="soundLabel" aria-describedby="soundHelp"><span class="switch-knob"></span></button>
               </div>
+              <div class="setting">
+                <div class="setting-text">
+                  <span class="setting-name" id="voiceLabel">Read the coach aloud</span>
+                  <span class="setting-help" id="voiceHelp">The coach's notes, warnings and lesson steps are read out loud with your device's voice.</span>
+                </div>
+                <button type="button" class="switch" id="voiceToggle" role="switch" aria-checked="false" aria-labelledby="voiceLabel" aria-describedby="voiceHelp"><span class="switch-knob"></span></button>
+              </div>
               <fieldset class="setting setting-stack">
                 <legend class="setting-name">Language</legend>
                 <div class="segmented segmented-3 lang-choice" role="radiogroup" aria-label="Language">
@@ -631,7 +645,10 @@
           </div>
 
           <div class="side-body" id="lnLesson" hidden>
-            <button type="button" class="ln-back" id="btnLnBack"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>All lessons</span></button>
+            <div class="ln-top">
+              <button type="button" class="ln-back" id="btnLnBack"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>All lessons</span></button>
+              <button type="button" class="voice-btn" data-voice-toggle aria-pressed="false" aria-label="Read the coach aloud" title="Read the coach aloud"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg></button>
+            </div>
             <h2 class="ln-lesson-title font-display" id="lnLessonTitle"></h2>
             <p class="ln-intro" id="lnIntro"></p>
             <ol class="ln-dots" id="lnDots" aria-label="Steps"></ol>

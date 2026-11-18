@@ -1254,6 +1254,7 @@
       var undoBtn = $('guardUndo');
       var playBtn = $('guardPlay');
       $('guardText').textContent = info.message;
+      Voice.say(C.joinSentences([$('guardTitle').textContent, info.message]), true);
       $('guardNote').textContent = info.banked === false
         ? T('The red square on the board shows the danger.')
         : T('The red square on the board shows the danger. This position is saved to My Blunder Bank so you can practice it later.');
@@ -1309,6 +1310,87 @@
   /* ======================================================================== */
 
   var ui = {};
+  /* ======================================================================== */
+  /* Read aloud: the coach speaks, with the device's own voices              */
+  /* ======================================================================== */
+
+  var Voice = {
+    on: false,
+    supported: typeof window.speechSynthesis !== 'undefined' && typeof window.SpeechSynthesisUtterance === 'function',
+    voice: null,
+    hasVoice: true,
+
+    locale: function () {
+      return (window.I18N && window.I18N.locale) || 'en';
+    },
+
+    /** The best voice for the site's language: same region, then same language. */
+    pick: function () {
+      if (!this.supported) return;
+      var voices = [];
+      try { voices = window.speechSynthesis.getVoices() || []; } catch (e) { voices = []; }
+      var loc = this.locale().toLowerCase();
+      var lang = loc.split('-')[0];
+      var norm = function (v) { return String(v.lang || '').toLowerCase().replace('_', '-'); };
+      var exact = voices.filter(function (v) { return norm(v) === loc; });
+      var same = voices.filter(function (v) { return norm(v).split('-')[0] === lang || (lang === 'zh' && norm(v).indexOf('cmn') === 0); });
+      var list = exact.length ? exact : same;
+      list.sort(function (a, b) { return (b.localService ? 1 : 0) - (a.localService ? 1 : 0); });
+      this.voice = list[0] || null;
+      this.hasVoice = !voices.length || !!this.voice;
+      renderVoiceHelp();
+    },
+
+    say: function (text, interrupt) {
+      if (!this.on || !this.supported || !text) return;
+      try {
+        var synth = window.speechSynthesis;
+        if (interrupt) synth.cancel();
+        var u = new window.SpeechSynthesisUtterance(String(text));
+        u.lang = this.locale();
+        if (this.voice) u.voice = this.voice;
+        u.rate = 0.95;
+        synth.speak(u);
+      } catch (e) {
+        /* speech failed: the text is still on screen */
+      }
+    },
+
+    stop: function () {
+      if (!this.supported) return;
+      try { window.speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+    }
+  };
+
+  function renderVoiceHelp() {
+    var help = $('voiceHelp');
+    if (!help) return;
+    if (!Voice.supported) help.textContent = T("This browser can't read text out loud.");
+    else if (!Voice.hasVoice) help.textContent = T("Your device has no voice for this language, so another voice may read it, or it may stay silent. You can add voices in your phone's settings.");
+    else help.textContent = T("The coach's notes, warnings and lesson steps are read out loud with your device's voice.");
+  }
+
+  function setVoice(on, announce) {
+    Voice.on = !!on && Voice.supported;
+    S.voiceOn = Voice.on;
+    var t = $('voiceToggle');
+    if (t) {
+      t.setAttribute('aria-checked', String(Voice.on));
+      t.disabled = !Voice.supported;
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('[data-voice-toggle]'), function (b) {
+      b.setAttribute('aria-pressed', String(Voice.on));
+      b.classList.toggle('is-on', Voice.on);
+      b.hidden = !Voice.supported;
+    });
+    if (!Voice.on) Voice.stop();
+    if (announce) {
+      saveSettings();
+      // Speaking inside the tap also unlocks speech on iPhone.
+      if (Voice.on) Voice.say(T("I'll read my notes out loud."), true);
+    }
+  }
+
   var S = {
     game: new window.Chess(),
     playerColor: 'w',
@@ -1345,6 +1427,7 @@
     checkBase: { w: 0, b: 0 }, // Three-check: checks given before the game's first move
     premove: null, // { from, to } queued while the bot thinks
     variantNote: '',
+    voiceOn: false,
     liveEval: null,
     summaryStartPly: 0,
     review: { quality: {}, evals: {}, saves: 0 }
@@ -1532,6 +1615,7 @@
       if (typeof s.modeChoice === 'string' && Object.prototype.hasOwnProperty.call(GAME_MODES, s.modeChoice)) S.modeChoice = s.modeChoice;
       if (typeof s.oddsChoice === 'string' && Object.prototype.hasOwnProperty.call(ODDS, s.oddsChoice)) S.oddsChoice = s.oddsChoice;
       if (typeof s.autoFlip === 'boolean') S.autoFlip = s.autoFlip;
+      if (typeof s.voiceOn === 'boolean') S.voiceOn = s.voiceOn;
       if (s.boardThemeChosen === true && (s.boardTheme === 'grey' || s.boardTheme === 'green' || s.boardTheme === 'brown')) {
         S.boardTheme = s.boardTheme;
         S.boardThemeChosen = true;
@@ -1552,6 +1636,7 @@
       modeChoice: S.modeChoice,
       oddsChoice: S.oddsChoice,
       autoFlip: S.autoFlip,
+      voiceOn: S.voiceOn,
       installSnoozedUntil: S.installSnoozedUntil,
       boardTheme: S.boardTheme,
       boardThemeChosen: S.boardThemeChosen,
@@ -1845,6 +1930,7 @@
     });
     ui.feed.insertBefore(li, ui.feed.firstChild);
     while (ui.feed.children.length > 40) ui.feed.removeChild(ui.feed.lastElementChild);
+    if (Voice.on && !ui.viewPlay.hidden) Voice.say(C.joinSentences(tips.map(function (t) { return t.text; })));
   }
 
   function evalToPct(cp) {
@@ -2067,6 +2153,7 @@
    */
   function newGame(opts) {
     opts = opts || {};
+    Voice.stop();
     if (S.closeGuard) S.closeGuard();
     if (S.closePromotion) S.closePromotion();
     cancelEngineWork();
@@ -4407,7 +4494,10 @@
 
     status: function (task, feedback, tone, kind) {
       // Lesson texts are written in English in lessons.js; translate them here.
-      $('lnTask').textContent = T(task);
+      var taskText = T(task);
+      var changed = $('lnTask').textContent !== taskText;
+      if (changed || feedback) Voice.say(changed && !feedback ? taskText : (feedback || ''), true);
+      $('lnTask').textContent = taskText;
       $('lnFeedback').textContent = feedback || '';
       $('lnDot').dataset.kind = kind || 'you';
       $('lnTask').closest('.status-card').dataset.tone = tone || '';
@@ -6130,6 +6220,17 @@
       }
     }
     applySound(S.soundOn, false);
+    setVoice(S.voiceOn, false);
+    if (Voice.supported) {
+      Voice.pick();
+      try { window.speechSynthesis.addEventListener('voiceschanged', function () { Voice.pick(); }); } catch (e) { /* older browsers */ }
+    } else {
+      renderVoiceHelp();
+    }
+    $('voiceToggle').addEventListener('click', function () { setVoice(!Voice.on, true); });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-voice-toggle]'), function (b) {
+      b.addEventListener('click', function () { setVoice(!Voice.on, true); });
+    });
     ui.soundToggle.addEventListener('click', function () { applySound(!S.soundOn, true); });
     ui.btnSoundQuick.addEventListener('click', function () { applySound(!S.soundOn, true); });
     Sound.onPack(function (recorded) {
