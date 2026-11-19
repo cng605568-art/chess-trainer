@@ -5068,8 +5068,8 @@
     return PUZZLE_THEMES[0];
   }
 
-  function todayKey() {
-    var d = new Date();
+  function todayKey(date) {
+    var d = date || new Date();
     return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
   }
 
@@ -7046,6 +7046,106 @@
     }
   };
 
+  /* ======================================================================== */
+  /* Account: optional Google sign-in that syncs progress (account.js)       */
+  /* ======================================================================== */
+
+  var PERSON_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.2" r="3.9" fill="currentColor"/><path d="M4.5 20c.6-4.2 3.6-6.6 7.5-6.6s6.9 2.4 7.5 6.6z" fill="currentColor"/></svg>';
+
+  function accountInitial(acc) {
+    var name = acc.displayName() || acc.email();
+    return name ? name.trim().charAt(0).toUpperCase() : '';
+  }
+
+  function syncTime(ts) {
+    var d = new Date(ts);
+    var time = d.toLocaleTimeString(uiLocale(), { hour: 'numeric', minute: '2-digit' });
+    return todayKey() === todayKey(d) ? time : d.toLocaleDateString(uiLocale(), { day: 'numeric', month: 'short' }) + ' ' + time;
+  }
+
+  function renderAccount(acc) {
+    var signedIn = !!acc.user;
+    var show = acc.available || signedIn || acc.status === 'starting' || acc.status === 'syncing';
+    $('accountSection').hidden = !show;
+    $('accountChip').hidden = !show;
+    $('accountOut').hidden = signedIn;
+    $('accountIn').hidden = !signedIn;
+    var signIn = $('btnSignIn');
+    signIn.disabled = acc.status === 'starting';
+    signIn.querySelector('span').textContent = acc.status === 'starting' && !signedIn ? T('Opening Google…') : T('Sign in with Google');
+
+    var status = '';
+    var short = '';
+    if (acc.status === 'syncing') {
+      status = short = T('Syncing…');
+    } else if (acc.status === 'error') {
+      status = T("Couldn't sync just now. Your progress is still saved on this device and will sync next time.");
+      short = T("Couldn't sync");
+    } else if (acc.lastSync) {
+      status = T('Synced at {time}. Settings and the game in progress stay on each device.', { time: syncTime(acc.lastSync) });
+      short = T('Synced');
+    }
+    var chip = $('accountChip');
+    chip.classList.toggle('is-in', signedIn);
+    var initial = signedIn ? accountInitial(acc) : '';
+    if (initial) $('chipAvatar').textContent = initial;
+    else $('chipAvatar').innerHTML = PERSON_ICON;
+    $('chipName').textContent = signedIn ? (acc.displayName() || acc.email()) : T('Sign in');
+    $('chipSub').textContent = signedIn ? (short || T('Signed in')) : T('Sync your progress');
+    $('chipSub').classList.toggle('is-error', acc.status === 'error');
+    chip.setAttribute('aria-label', signedIn ? T('Account: {name}', { name: acc.displayName() || acc.email() }) : T('Sign in to keep your progress on every device'));
+    if (signedIn) {
+      $('accountAvatar').textContent = initial || '?';
+      $('accountName').textContent = acc.displayName();
+      $('accountEmail').textContent = acc.email();
+      $('accountStatus').textContent = status;
+      $('accountStatus').classList.toggle('is-error', acc.status === 'error');
+      $('btnSyncNow').disabled = acc.status === 'syncing';
+    }
+    $('backupHelp').textContent = signedIn
+      ? T('Your progress is saved to your account. A backup file is still handy as an extra copy.')
+      : T('Your games, puzzles, lessons and badges are saved only in this browser. Make a backup here, then load it on your other phone or computer.');
+  }
+
+  function accountNotice(kind) {
+    var acc = window.Account;
+    var name = acc ? acc.displayName() || acc.email() : '';
+    if (kind === 'signed-in') toast('✓', T('Signed in as {name}', { name: name }), T('Your progress is saved to your account.'));
+    else if (kind === 'signed-in-merged') toast('✓', T('Signed in as {name}', { name: name }), T('Progress from your other devices has been added.'));
+    else if (kind === 'pulled') toast('↻', T('Progress synced'), T('What you did on your other devices is here now.'));
+    else if (kind === 'signed-out') toast('✓', T('Signed out'), T('Your progress stays on this device.'));
+    else if (kind === 'deleted') toast('✓', T('Account deleted'), T('Your progress saved online is gone. This device keeps its own copy.'));
+    else if (kind === 'delete-failed') toast('!', T("Couldn't delete the account"), T('Check your connection and try again.'));
+    else if (kind === 'signin-failed') toast('!', T("Sign-in didn't finish"), T('Try again. If it keeps happening, check your connection.'));
+  }
+
+  function setupAccount() {
+    var acc = window.Account;
+    if (!acc) return;
+    $('btnSignIn').addEventListener('click', function () { acc.signIn(); });
+    $('btnSyncNow').addEventListener('click', function () { acc.syncNow({ apply: true }); });
+    $('btnSignOut').addEventListener('click', function () { acc.signOut(); });
+    $('btnDeleteAccount').addEventListener('click', function () {
+      if (!window.confirm(T('Delete your account? Your progress saved online is deleted for good. This device keeps its own copy.'))) return;
+      acc.deleteAccount();
+    });
+    $('accountChip').addEventListener('click', function () {
+      goToPlay('settings');
+      var box = $('accountSection');
+      if (box.scrollIntoView) box.scrollIntoView({ block: 'nearest', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+      var target = acc.user ? $('btnSyncNow') : $('btnSignIn');
+      setTimeout(function () { try { target.focus({ preventScroll: true }); } catch (e) { target.focus(); } }, 50);
+    });
+    acc.init({
+      onState: renderAccount,
+      notice: accountNotice,
+      reload: function () {
+        S.restoring = true;
+        location.reload();
+      }
+    });
+  }
+
   function setupBackup() {
     $('btnBackupSave').addEventListener('click', function () {
       var blob = new Blob([JSON.stringify(collectBackup())], { type: 'application/json' });
@@ -7694,6 +7794,7 @@
     Reviewer.init();
     setupInstall();
     setupBackup();
+    setupAccount();
     updateBankBadge();
     engine.start();
     S.homeLevel = S.levelIndex;

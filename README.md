@@ -2,7 +2,7 @@
 
 A free, static chess site for complete beginners. Short lessons teach the pieces, 1,366 beginner puzzles build your eye, and when you play the bots a coach checks every move before it lands. Every blunder you make becomes a puzzle in your own Blunder Bank. The site works in English, Bahasa Melayu and Chinese, installs on a phone like an app, and runs offline after the first visit.
 
-No build step, no server, no accounts. Everything runs in the browser and saves to `localStorage`.
+No build step and no server of its own. Everything runs in the browser and saves to `localStorage`; signing in with Google to sync between devices is optional.
 
 ## Deploy in 3 steps
 
@@ -44,6 +44,7 @@ A sidebar on the left switches between **Home**, **Learn**, **Play**, **Puzzles*
 | `index.html` | Sidebar, Home, Learn, Play, Puzzles and Blunder Bank views, right panel with Game / New game / Settings tabs, promotion, Coach Guard and transfer-code dialogs, share and search tags |
 | `style.css` | Grey theme, board colours, highlights, danger pulse, menu cards, responsive rules |
 | `stockfish-worker.js` | Web Worker that loads Stockfish 10 from cdnjs (jsDelivr as backup) and answers search requests as JSON. Falls back to a small built-in engine if both CDNs are blocked |
+| `account.js` | Optional Google sign-in through Supabase and merging progress between devices |
 | `chess960.js` | Chess960 on top of chess.js: random starts, castling with rook-file rights (Shredder-FEN), and the chess.js methods the app uses |
 | `coach.js` | Plain-English move explanations (hanging pieces, checks, center control, castling, evaluation swings) and the Blunder Bank storage |
 | `app.js` | Board rendering and piece animation, click or drag to move, pawn promotion, sound effects, the game loop, Coach Guard, replay, game summary, lessons, puzzles, XP and badges, sharing, backups |
@@ -72,7 +73,9 @@ A sidebar on the left switches between **Home**, **Learn**, **Play**, **Puzzles*
 
 **Install as an app.** On Android and desktop Chrome, Home shows an **Install app** button. On iPhone and iPad it explains Share, then Add to Home Screen. Once installed (or after one visit), the bots, lessons and puzzles work without internet.
 
-**Move to another device.** Progress is saved in the browser, so there are no accounts. Settings → Move to another device makes a backup file or a transfer code (a long text you can paste into a chat to yourself) that loads everything on another phone or computer.
+**Accounts (optional).** Settings → Account → Sign in with Google keeps progress the same on every device. Data lives in a Supabase project (`second-look`): one row per player in `public.progress`, protected by row level security so each player can only read and write their own row. `account.js` only downloads supabase-js for people who sign in. Syncing merges instead of overwriting: finished lessons, badges, games and saved blunders from both sides are kept, and counts like XP keep the higher number. Changes from other devices arrive when the site opens (one quick reload); while you play, the device sends its changes every minute or when you leave. Settings and the game in progress stay on each device. Delete account (in Settings) deletes the account and its saved progress. To set it up on a copy of the site, see `account.js` for the project URL and publishable key, and turn on Google under Authentication → Providers in Supabase.
+
+**Move to another device.** Without an account, progress is saved only in the browser. Settings → Move to another device makes a backup file or a transfer code (a long text you can paste into a chat to yourself) that loads everything on another phone or computer.
 
 **Share.** After a game, **Share result** makes a picture of the final board with the result and opens your phone's share menu, or saves the picture and copies the link on a computer.
 

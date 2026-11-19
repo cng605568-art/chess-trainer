@@ -858,6 +858,8 @@
 
   var BANK_KEY = 'chessTrainer.blunderBank.v1';
   var STATS_KEY = 'chessTrainer.blunderStats.v1';
+  // Ids of solved or cleared blunders, so account sync doesn't bring them back from another device.
+  var REMOVED_KEY = 'chessTrainer.blunderBank.removed.v1';
   var MAX_ENTRIES = 300;
   var memoryStore = {};
 
@@ -899,6 +901,15 @@
     } catch (e) {
       /* non-browser environment */
     }
+  }
+
+  function noteRemoved(ids) {
+    if (!ids.length) return;
+    var list = [];
+    try { list = JSON.parse(storageGet(REMOVED_KEY) || '[]'); } catch (e) { list = []; }
+    if (!Array.isArray(list)) list = [];
+    ids.forEach(function (id) { if (list.indexOf(id) === -1) list.push(id); });
+    storageSet(REMOVED_KEY, JSON.stringify(list.slice(-500)));
   }
 
   var BlunderBank = {
@@ -1002,7 +1013,10 @@
     remove: function (id) {
       var list = this._read();
       var next = list.filter(function (e) { return e.id !== id; });
-      if (next.length !== list.length) this._write(next);
+      if (next.length !== list.length) {
+        noteRemoved([id]);
+        this._write(next);
+      }
       return next.length !== list.length;
     },
 
@@ -1022,6 +1036,7 @@
     },
 
     clear: function () {
+      noteRemoved(this._read().map(function (e) { return e.id; }));
       this._write([]);
     },
 

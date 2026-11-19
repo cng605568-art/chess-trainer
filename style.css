@@ -4712,3 +4712,148 @@ html[lang^="zh"] body {
   flex-direction: column;
   gap: 12px;
 }
+
+/* Account: optional Google sign-in (sidebar chip and Settings section) */
+.account-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: #2a2a2a;
+  color: #cfcfcf;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-chip:hover {
+  background: #323232;
+}
+
+.account-chip:focus-visible {
+  outline: 2px solid var(--silver);
+  outline-offset: 2px;
+}
+
+.account-chip[hidden] {
+  display: none;
+}
+
+.account-avatar {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--ghost);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.account-avatar svg {
+  width: 18px;
+  height: 18px;
+}
+
+.account-chip.is-in .account-avatar,
+.account-avatar-big {
+  background: var(--silver);
+  color: var(--silver-ink);
+}
+
+.account-avatar-big {
+  width: 40px;
+  height: 40px;
+  font-size: 1.15rem;
+}
+
+.account-chip-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.account-chip-name {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.92rem;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.account-chip-sub {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.account-chip-sub.is-error {
+  color: var(--warn);
+}
+
+.account-signin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+}
+
+.account-signin svg {
+  width: 18px;
+  height: 18px;
+}
+
+.account-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.account-names {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.account-name {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.account-email {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.account-status {
+  margin-top: 10px;
+}
+
+.account-status.is-error {
+  color: var(--warn);
+}
+
+.account-actions .account-delete {
+  grid-column: 1 / -1;
+  color: #f0a39e;
+}

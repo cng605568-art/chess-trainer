@@ -173,6 +173,10 @@
       </nav>
 
       <div class="sidebar-foot">
+        <button type="button" class="account-chip" id="accountChip" hidden>
+          <span class="account-avatar" id="chipAvatar" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.2" r="3.9" fill="currentColor"/><path d="M4.5 20c.6-4.2 3.6-6.6 7.5-6.6s6.9 2.4 7.5 6.6z" fill="currentColor"/></svg></span>
+          <span class="account-chip-text"><span class="account-chip-name" id="chipName">Sign in</span><span class="account-chip-sub" id="chipSub">Sync your progress</span></span>
+        </button>
         <label class="lang-pick">
           <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.8 3.8 5.8 3.8 9s-1.2 6.2-3.8 9c-2.6-2.8-3.8-5.8-3.8-9S9.4 5.8 12 3Z"/></svg>
           <span class="visually-hidden">Language</span>
@@ -571,6 +575,25 @@
           <!-- Settings pane -->
           <div class="side-body" id="pane-settings" role="tabpanel" aria-labelledby="ptab-settings" hidden>
             <div class="settings">
+              <fieldset class="setting setting-stack account-box" id="accountSection" hidden>
+                <legend class="setting-name">Account</legend>
+                <div id="accountOut">
+                  <p class="setting-help">Sign in with Google to keep your games, puzzles, lessons and badges on every phone and computer you use. It's optional: everything works without an account.</p>
+                  <button type="button" class="btn btn-primary account-signin" id="btnSignIn"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.2" r="3.9" fill="currentColor"/><path d="M4.5 20c.6-4.2 3.6-6.6 7.5-6.6s6.9 2.4 7.5 6.6z" fill="currentColor"/></svg><span>Sign in with Google</span></button>
+                </div>
+                <div id="accountIn" hidden>
+                  <div class="account-who">
+                    <span class="account-avatar account-avatar-big" id="accountAvatar" aria-hidden="true"></span>
+                    <span class="account-names"><span class="account-name" id="accountName"></span><span class="account-email" id="accountEmail"></span></span>
+                  </div>
+                  <p class="setting-help account-status" id="accountStatus" role="status" aria-live="polite"></p>
+                  <div class="backup-actions account-actions">
+                    <button type="button" class="btn btn-ghost" id="btnSyncNow">Sync now</button>
+                    <button type="button" class="btn btn-ghost" id="btnSignOut">Sign out</button>
+                    <button type="button" class="btn btn-ghost account-delete" id="btnDeleteAccount">Delete account</button>
+                  </div>
+                </div>
+              </fieldset>
               <div class="setting">
                 <div class="setting-text">
                   <span class="setting-name" id="guardLabel">Coach Guard</span>
@@ -617,7 +640,7 @@
               </fieldset>
               <fieldset class="setting setting-stack" id="backupSection">
                 <legend class="setting-name">Move to another device</legend>
-                <p class="setting-help">Your games, puzzles, lessons and badges are saved only in this browser. Make a backup here, then load it on your other phone or computer.</p>
+                <p class="setting-help" id="backupHelp">Your games, puzzles, lessons and badges are saved only in this browser. Make a backup here, then load it on your other phone or computer.</p>
                 <div class="backup-actions">
                   <button type="button" class="btn btn-ghost" id="btnBackupSave">Save backup file</button>
                   <button type="button" class="btn btn-ghost" id="btnBackupLoad">Load backup file</button>
@@ -1074,6 +1097,7 @@
     if (window.I18N && I18N.lang !== 'en') document.write('<script src="./lang.js"><\/script>');
   </script>
   <script src="./chess960.js"></script>
+  <script src="./account.js"></script>
   <script src="./coach.js"></script>
   <script src="./lessons.js"></script>
   <script src="./app.js"></script>
