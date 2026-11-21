@@ -4857,3 +4857,67 @@ html[lang^="zh"] body {
   grid-column: 1 / -1;
   color: #f0a39e;
 }
+
+/* Cannibal King: the king's teeth mark, and the skills each king has eaten */
+.mode-cannibal {
+  position: relative;
+}
+
+.mode-cannibal::after {
+  content: "";
+  position: absolute;
+  right: 2px;
+  bottom: 3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--flag);
+  box-shadow: -5px 2px 0 -1px var(--flag);
+}
+
+.king-skills {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(229, 83, 75, 0.18);
+  vertical-align: middle;
+}
+
+.king-skills[hidden] {
+  display: none;
+}
+
+.king-skills .skill {
+  width: 18px;
+  height: 18px;
+}
+
+.king-skills .skill.glyph {
+  width: auto;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* No engine in this mode, so no score bar */
+#view-play[data-mode="cannibal"] .evalbar,
+#view-play[data-mode="cannibal"] .eval-chip {
+  display: none;
+}
+
+/* Home: the newest way to play gets a whole row */
+.way-wide {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  justify-content: center;
+  gap: 12px;
+  text-align: left;
+}
+
+.way-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}

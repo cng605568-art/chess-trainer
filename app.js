@@ -84,6 +84,7 @@
     odds: { name: 'Head start', sub: 'The bot gives up a piece', help: 'The bot starts without one of its pieces, so you begin ahead. A friendly way to win your first games.' },
     koth: { name: 'King of the Hill', sub: 'King to the centre wins', help: 'Normal chess with one extra way to win: get your king to one of the four centre squares (d4, e4, d5 or e5). Checkmate still wins too.' },
     threecheck: { name: 'Three-check', sub: 'Give 3 checks to win', help: "Normal chess with one extra way to win: put the other king in check three times. Checkmate still wins too." },
+    cannibal: { name: 'Cannibal King', sub: 'Kings eat their own pieces', help: 'Normal chess, except both kings may eat their own pieces and keep their moves: eat a knight to jump, a bishop to slide diagonally, a rook to slide straight. The skills last for the rest of the game.' },
     c960: { name: 'Chess960', sub: 'Shuffled back row', help: 'The pieces on the back row start in a shuffled order, the same for both sides, so there are no openings to remember. Every other rule is the same. To castle, move your king onto your rook.' },
     friend: { name: 'Play a friend', sub: 'Two players, one device', help: 'Two people take turns on this device. Turn on Turn the board to see your own pieces at the bottom on your turn.' }
   };
@@ -138,7 +139,15 @@
 
   /** The FEN to save or restart from. Keeps Chess960 castling rights, which fen() leaves out. */
   function fullFen(game) {
-    return game.fen960 ? game.fen960() : game.fen();
+    if (game.fen960) return game.fen960();
+    if (game.fenFull) return game.fenFull(); // Cannibal King: the kings' skills too
+    return game.fen();
+  }
+
+  /** A game for a mode: Cannibal King has its own rules; everything else is chess.js (or Chess960). */
+  function makeModeGame(fen, mode) {
+    if ((mode || S.mode) === 'cannibal' && window.Cannibal) return new window.Cannibal.Game(fen || undefined);
+    return makeGame(fen);
   }
 
   function safeMove(game, move) {
@@ -1456,6 +1465,7 @@
   function oppColor() { return C.opposite(S.playerColor); }
   function isFriend() { return S.mode === 'friend'; }
   function isVariant() { return S.mode === 'koth' || S.mode === 'threecheck'; }
+  function isCannibal() { return S.mode === 'cannibal'; }
   function modeName(m) { return T((GAME_MODES[m] || GAME_MODES.standard).name); }
 
   /** The usual start, without one of the bot's pieces (and its castling right, for a rook). */
@@ -2052,8 +2062,33 @@
     else ol.scrollTop = ol.scrollHeight;
   }
 
+  /** Cannibal King: pieces taken by each side (eaten ones don't count as taken by the other side). */
+  function cannibalCaptures() {
+    var out = { byWhite: [], byBlack: [], diff: C.capturedPieces(S.game.fen()).diff };
+    var order = { q: 0, r: 1, b: 2, n: 3, p: 4 };
+    S.game.history({ verbose: true }).forEach(function (m) {
+      if (m.captured && !m.eat) (m.color === 'w' ? out.byWhite : out.byBlack).push(m.captured);
+    });
+    out.byWhite.sort(function (a, b) { return order[a] - order[b]; });
+    out.byBlack.sort(function (a, b) { return order[a] - order[b]; });
+    return out;
+  }
+
+  function renderSkills(el, color) {
+    if (!el) return;
+    var sk = S.started && isCannibal() && S.game.skills ? S.game.skills(color) : null;
+    var list = sk ? ['n', 'b', 'r'].filter(function (t) { return sk[t]; }) : [];
+    el.hidden = !list.length;
+    if (!list.length) return;
+    el.innerHTML = '';
+    list.forEach(function (t) { el.appendChild(createPieceEl({ t: t, c: color }, 'skill')); });
+    var label = T('This king can also move like: {pieces}', { pieces: list.map(function (t) { return C.pieceName(t); }).join(', ') });
+    el.setAttribute('aria-label', label);
+    el.title = label;
+  }
+
   function renderStrips() {
-    var caps = C.capturedPieces(S.game.fen());
+    var caps = S.started && isCannibal() ? cannibalCaptures() : C.capturedPieces(S.game.fen());
     var topColor = C.opposite(S.orientation);
     var bottomColor = S.orientation;
     var lvl = LEVELS[S.levelIndex];
@@ -2111,6 +2146,8 @@
     }
     fill(topColor, ui.topName, ui.topSide, ui.topCaps, ui.topAdv, ui.topAvatar, ui.topClock, ui.topChecks);
     fill(bottomColor, ui.bottomName, ui.bottomSide, ui.bottomCaps, ui.bottomAdv, ui.bottomAvatar, ui.bottomClock, ui.bottomChecks);
+    renderSkills($('topSkills'), topColor);
+    renderSkills($('bottomSkills'), bottomColor);
     ui.viewPlay.dataset.mode = S.started ? S.mode : '';
     renderClocks();
   }
@@ -2134,7 +2171,7 @@
       ? S.game.history().length > 0
       : S.game.history({ verbose: true }).some(function (m) { return m.color === S.playerColor; });
     ui.btnTakeBack.disabled = !hasMine || S.phase === 'warning' || S.phase === 'promoting' || (S.phase === 'over' && !!Clock.flagged);
-    ui.btnHint.disabled = S.phase !== 'player' || engine.failed;
+    ui.btnHint.disabled = S.phase !== 'player' || (engine.failed && !isCannibal());
     ui.btnNewGame.disabled = S.phase === 'warning' || S.phase === 'promoting';
     board.refresh();
   }
@@ -2191,7 +2228,7 @@
     if (S.mode === 'friend') S.playerColor = opts.color || 'w';
     else S.playerColor = opts.color || (S.colorChoice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : S.colorChoice);
     S.startFen = opts.fen || (S.mode === 'odds' ? oddsFen(S.playerColor, S.odds) : S.mode === 'c960' ? window.Chess960.randomFen() : null);
-    S.game = makeGame(S.startFen);
+    S.game = makeModeGame(S.startFen);
     S.gameId = makeId();
     if (S.mode === 'friend') S.playerColor = S.game.turn();
     S.orientation = S.mode === 'friend' && !S.autoFlip ? 'w' : S.playerColor;
@@ -2244,7 +2281,7 @@
         S.playerColor === 'w'
           ? T("New game! You're playing the white pieces, so you move first. Your opponent is {bot}.", { bot: botName(S.levelIndex) })
           : T("New game! You're playing the black pieces, so the bot moves first. Your opponent is {bot}.", { bot: botName(S.levelIndex) }),
-        S.guardOn ? T("Coach Guard is on, so I'll stop you before a big mistake and explain why.") : T('Coach Guard is off, but your big mistakes are still saved in My Blunder Bank.')
+        isCannibal() ? '' : S.guardOn ? T("Coach Guard is on, so I'll stop you before a big mistake and explain why.") : T('Coach Guard is off, but your big mistakes are still saved in My Blunder Bank.')
       ])
     }].concat(modeTips, loadStats().games < 3 && S.mode === 'standard' ? [{
       tone: 'tip',
@@ -2265,6 +2302,12 @@
       text = T('King of the Hill: checkmate wins, and so does getting your king to one of the four centre squares (marked on the board). The bot can win the same way, so keep an eye on its king too.');
     } else if (S.mode === 'threecheck') {
       text = T('Three-check: checkmate wins, and so does putting the other king in check three times. The dots next to each name count the checks. Checks are easier to give than checkmate, so look for them on every move.');
+    } else if (S.mode === 'cannibal') {
+      text = C.joinSentences([
+        T('Cannibal King: both kings may eat their own pieces. Move your king onto one of your own pieces to eat it. A knight teaches it to jump, a bishop to slide diagonally, a rook to slide straight, a queen both.'),
+        T('Every piece you eat is one soldier less, so choose wisely. The bot is a cannibal too.'),
+        T("Stockfish doesn't know these rules, so Coach Guard and the score bar rest in this mode.")
+      ]);
     } else if (S.mode === 'c960') {
       text = C.joinSentences([
         T('Chess960: the back row is shuffled, so think from move one. Bring out your pieces, take the centre and keep your king safe.'),
@@ -2272,7 +2315,7 @@
       ]);
     }
     var tc = TIME_CONTROLS[S.timeChoice] || TIME_CONTROLS.none;
-    var tips = text ? [{ tone: 'tip', icon: S.mode === 'koth' ? '⛰' : S.mode === 'threecheck' ? '+' : S.mode === 'c960' ? '⇄' : '♛', text: text }] : [];
+    var tips = text ? [{ tone: 'tip', icon: S.mode === 'koth' ? '⛰' : S.mode === 'threecheck' ? '+' : S.mode === 'c960' ? '⇄' : S.mode === 'cannibal' ? '♚' : '♛', text: text }] : [];
     if (tc.kind === 'bullet') {
       tips.push({ tone: 'tip', icon: '⚡', text: T('Bullet: {time}. Tip: while the bot is thinking you can already make your next move (a premove). It plays the moment the bot has moved, if it is still allowed. Tap any empty square to cancel it.', { time: T(tc.phrase) }) });
     }
@@ -2338,7 +2381,7 @@
     if (!data.moves.length && !startFen) return false;
     var g;
     try {
-      g = makeGame(startFen);
+      g = makeModeGame(startFen, data.mode);
     } catch (e) {
       return false;
     }
@@ -2402,6 +2445,11 @@
     refreshControls();
     if (runPremove()) return;
     if (isVariant()) variantNotes();
+    if (isCannibal()) {
+      // Stockfish can't judge these positions, so there is no score to show.
+      ui.statusSub.textContent = T('Your king may eat one of your own pieces to learn how it moves.');
+      return;
+    }
     // Look at the position while the player thinks: this is the "before"
     // evaluation the Coach Guard compares against.
     analyze(fen).then(function (a) {
@@ -2512,12 +2560,12 @@
     renderMoveList();
     renderStrips();
     refreshControls();
-    setStatus(engine.failed ? T('Playing your move…') : T('Coach is checking your move…'), 'busy');
+    setStatus(engine.failed || isCannibal() ? T('Playing your move…') : T('Coach is checking your move…'), 'busy');
 
-    var before = await analyze(fenBefore);
+    var before = isCannibal() ? null : await analyze(fenBefore);
     if (epoch !== S.epoch) return;
     var term = gameTerm(S.game);
-    var after = term ? terminalAnalysis(S.game, term) : await analyze(fenAfter);
+    var after = term ? terminalAnalysis(S.game, term) : isCannibal() ? null : await analyze(fenAfter);
     if (epoch !== S.epoch) return;
 
     var verdict = judge(before, after, mv);
@@ -2648,7 +2696,7 @@
     if (cls) S.review.quality[ply] = { cls: cls, san: mv.san, drop: verdict.drop, best: verdict.isBest ? null : verdict.bestMove };
     if (after && after.hasScore) S.review.evals[ply] = after.whiteCp;
     renderMoveList();
-    var tips = C.describeMove({
+    var tips = mv.eat ? cannibalNotes(mv, true, term) : C.describeMove({
       move: mv,
       fenBefore: fenBefore,
       fenAfter: fenAfter,
@@ -2697,7 +2745,12 @@
     var t0 = Date.now();
     var uci = null;
     var lines = null;
-    if (lvl.random > 0 && Math.random() < lvl.random) {
+    if (isCannibal()) {
+      await sleep(30); // let the "thinking" status show; the search runs on this page
+      if (epoch !== S.epoch) return;
+      var pick = window.Cannibal.bestMove(S.game, { level: S.levelIndex, timeMs: fast ? 250 : botLeft < 30000 ? 300 : 900 });
+      uci = pick && pick.uci;
+    } else if (lvl.random > 0 && Math.random() < lvl.random) {
       uci = randomMoveUci(S.game);
     } else {
       // Chess960: Stockfish gets the castling rights and answers castling as king-takes-rook (e1h1).
@@ -2743,7 +2796,7 @@
       endGame(term);
       return;
     }
-    pushNotes(C.describeMove({
+    pushNotes(mv.eat ? cannibalNotes(mv, false, term) : C.describeMove({
       move: mv,
       fenBefore: fenBefore,
       fenAfter: fenAfter,
@@ -2948,6 +3001,44 @@
     playerTurn(null);
   }
 
+  /** Cannibal King: a move in words, from the game's own move list (chess.js can't read eating moves). */
+  function cannibalMove(uci) {
+    var mvs = S.game.moves({ verbose: true });
+    for (var i = 0; i < mvs.length; i++) if (moveToUci(mvs[i]) === uci) return mvs[i];
+    return null;
+  }
+
+  function skillPhrase(gained) {
+    if (gained.indexOf('b') !== -1 && gained.indexOf('r') !== -1) return T('slide like a queen, in straight lines and diagonals');
+    if (gained.indexOf('n') !== -1) return T('jump like a knight');
+    if (gained.indexOf('b') !== -1) return T('slide diagonally like a bishop');
+    return T('slide in straight lines like a rook');
+  }
+
+  /** What a king eating its own piece means, for the coach notes. */
+  function cannibalNotes(mv, mine, term) {
+    var piece = C.pieceName(mv.captured);
+    var gained = mv.gained || [];
+    var text;
+    if (gained.length) {
+      text = mine
+        ? T('Your king ate its own {piece}! From now on it can also {skill}.', { piece: piece, skill: skillPhrase(gained) })
+        : T("The bot's king ate its own {piece}! From now on it can also {skill}. Check which squares it can reach before you move.", { piece: piece, skill: skillPhrase(gained) });
+    } else if (mv.captured === 'p') {
+      text = mine
+        ? T('Your king ate its own pawn. A king can already do everything a pawn can, so that was just a snack.')
+        : T("The bot's king ate its own pawn. That gives it nothing new: just a snack.");
+    } else {
+      text = mine
+        ? T('Your king ate its own {piece}, but it already had that skill, so this one was just a snack.', { piece: piece })
+        : T("The bot's king ate its own {piece}, but it already had that skill.", { piece: piece });
+    }
+    var notes = [{ tone: mine ? 'good' : 'warn', icon: '♚', text: text }];
+    if (term === 'checkmate') notes.push({ tone: mine ? 'good' : 'bad', icon: '#', text: mine ? T('And it was checkmate!') : T('And it was checkmate.') });
+    else if (ChessAPI.inCheck(S.game)) notes.push({ tone: mine ? 'good' : 'warn', icon: '+', text: mine ? T("And it gives check: the bot's king is under attack.") : T('And it gives check: your king is under attack.') });
+    return notes;
+  }
+
   async function showHint() {
     if (S.phase !== 'player') return;
     S.helped = true;
@@ -2956,7 +3047,14 @@
     var epoch = S.epoch;
     ui.btnHint.disabled = true;
     ui.btnHint.textContent = T('Thinking…');
-    var a = await analyze(fen);
+    var a;
+    if (isCannibal()) {
+      await sleep(30);
+      var cb = window.Cannibal.bestMove(S.game, { level: 4, timeMs: 700 });
+      a = cb ? { bestMove: cb.uci } : null;
+    } else {
+      a = await analyze(fen);
+    }
     ui.btnHint.textContent = T('Show hint');
     if (epoch !== S.epoch || S.game.fen() !== fen || S.phase !== 'player' || S.viewPly !== null) {
       refreshControls();
@@ -2983,7 +3081,7 @@
       S.hintStage = 2;
       board.setMarks({ hint: [mv.from] });
       board.setArrows([{ from: mv.from, to: mv.to, color: 'green' }]);
-      var bestMv = describeUci(fen, a.bestMove);
+      var bestMv = isCannibal() ? cannibalMove(a.bestMove) : describeUci(fen, a.bestMove);
       pushNotes([{ tone: 'tip', icon: '?', text: T('The best move here: {move}. Follow the green arrow.', { move: bestMv ? C.moveAction(bestMv, true) : sanOf(fen, a.bestMove) }) }], T('Hint'));
     }
   }
@@ -2994,7 +3092,7 @@
 
   function gameAtPly(ply) {
     var hist = S.game.history({ verbose: true });
-    var g = makeGame(S.startFen);
+    var g = makeModeGame(S.startFen);
     for (var i = 0; i < ply && i < hist.length; i++) {
       var m = hist[i];
       safeMove(g, m.promotion ? { from: m.from, to: m.to, promotion: m.promotion } : { from: m.from, to: m.to });
@@ -3082,9 +3180,15 @@
       if (q.cls === 'blunder' && (firstBlunder === null || ply < firstBlunder)) firstBlunder = ply;
     });
     ui.summaryResult.textContent = gameOutcome(term).summary;
-    ui.summaryPanel.classList.toggle('is-friend', isFriend());
-    if (isFriend()) {
-      ui.summaryLine.textContent = C.joinSentences([
+    ui.summaryPanel.classList.toggle('is-friend', isFriend() || isCannibal());
+    $('btnSummaryAnalyze').hidden = isCannibal();
+    if (isFriend() || isCannibal()) {
+      var eaten = hist.filter(function (m) { return m.eat && m.color === S.playerColor; }).length;
+      ui.summaryLine.textContent = C.joinSentences(isCannibal() ? [
+        plural(Math.ceil(hist.length / 2), 'The game lasted {n} move.', 'The game lasted {n} moves.'),
+        eaten ? plural(eaten, 'Your king ate {n} of its own pieces.', 'Your king ate {n} of its own pieces.') : T("Your king didn't eat any of its own pieces."),
+        T('Step back through the moves to see where it turned.')
+      ] : [
         plural(Math.ceil(hist.length / 2), 'The game lasted {n} move.', 'The game lasted {n} moves.'),
         T('Step back through the moves together to see where it turned.')
       ]);

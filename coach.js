@@ -446,6 +446,10 @@
       to: m.kingTo || m.to, // Chess960 castling is written king-onto-rook; say where the king lands
       promo: m.promotion ? T(', turning it into {apiece}', { apiece: aPiece(m.promotion) }) : ''
     };
+    if (m.eat) {
+      // Cannibal King: the king eats one of its own pieces
+      return mine ? T('eat your own {captured} on {to} with your king', p) : T('eat its own {captured} on {to} with its king', p);
+    }
     if (isCastle(m)) {
       return mine ? T('castle (your king jumps to {to}, where it is safer)', p) : T('castle (its king jumps to {to}, where it is safer)', p);
     }
@@ -472,6 +476,7 @@
       to: m.to,
       promo: m.promotion ? T(', becomes {apiece}', { apiece: aPiece(m.promotion) }) : ''
     };
+    if (m.eat) return T('king eats its own {captured} on {to}', p);
     if (isCastle(m)) return T('castled');
     if (isEnPassant(m)) return T('pawn takes pawn (en passant)');
     if (m.captured) return T('{piece} takes {captured} on {to}{promo}', p);
@@ -487,7 +492,8 @@
       promo: m.promotion ? T(', becomes {apiece}', { apiece: aPiece(m.promotion) }) : ''
     };
     var move;
-    if (isCastle(m)) move = T('castled');
+    if (m.eat) move = T('king eats its own {captured} on {to}', p);
+    else if (isCastle(m)) move = T('castled');
     else if (isEnPassant(m)) move = T('pawn takes pawn (en passant)');
     else if (m.captured) move = T('{piece} takes {captured} on {to}{promo}', p);
     else move = T('{piece} to {to}{promo}', p);

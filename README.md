@@ -45,6 +45,7 @@ A sidebar on the left switches between **Home**, **Learn**, **Play**, **Puzzles*
 | `style.css` | Grey theme, board colours, highlights, danger pulse, menu cards, responsive rules |
 | `stockfish-worker.js` | Web Worker that loads Stockfish 10 from cdnjs (jsDelivr as backup) and answers search requests as JSON. Falls back to a small built-in engine if both CDNs are blocked |
 | `account.js` | Optional Google sign-in through Supabase and merging progress between devices |
+| `cannibal.js` | Cannibal King: the rules (kings eat their own pieces and keep their moves) and the bot that plays them |
 | `chess960.js` | Chess960 on top of chess.js: random starts, castling with rook-file rights (Shredder-FEN), and the chess.js methods the app uses |
 | `coach.js` | Plain-English move explanations (hanging pieces, checks, center control, castling, evaluation swings) and the Blunder Bank storage |
 | `app.js` | Board rendering and piece animation, click or drag to move, pawn promotion, sound effects, the game loop, Coach Guard, replay, game summary, lessons, puzzles, XP and badges, sharing, backups |
@@ -102,6 +103,7 @@ A sidebar on the left switches between **Home**, **Learn**, **Play**, **Puzzles*
 - **Head start**: the bot starts without its queen, a rook or a knight.
 - **King of the Hill**: checkmate wins, and so does getting your king to one of the four centre squares (outlined on the board). The bot plays normal chess, but it always takes a winning king move and never lets you reach the centre in one move. Coach Guard warns before a move that lets the bot's king reach the centre.
 - **Three-check**: checkmate wins, and so does giving three checks. Dots next to each name count them. The bot gives the third check when it can and avoids allowing yours.
+- **Cannibal King**: both kings may eat their own pieces by moving onto them, and keep that piece's moves for the rest of the game: a knight lets the king jump, a bishop slide diagonally, a rook slide straight, a queen both (a pawn is just a snack). A king with skills also gives check along them, and a king that has eaten a knight and a rook can even checkmate on its own. Kings still can't move into check. Stockfish doesn't know these rules, so `cannibal.js` has its own move generator (checked against chess.js in thousands of positions) and a small alpha-beta bot whose strength follows the six levels. Coach Guard, the score bar and the Blunder Bank rest in this mode. Saved games keep the kings' skills as a 7th FEN field (`NR/-`).
 - **Chess960**: the back row starts in one of 960 shuffled orders, the same for both sides (bishops on opposite colours, king between the rooks). Castle by moving your king onto your rook, or straight to g1 or c1 when that isn't also a normal king move; the king ends on the g- or c-file and the rook beside it, as in normal chess. Stockfish plays it with `UCI_Chess960` on, and the game is saved with Shredder-FEN castling rights (`HAha`).
 - **Play a friend**: two people on one device. The board turns after each move (switch it off under New game), the clocks run for both, and Take back undoes one move. No coach or Blunder Bank in these games.
 
